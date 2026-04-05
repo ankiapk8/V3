@@ -225,6 +225,8 @@ components:
           type: string
         description:
           type: ["string", "null"]
+        parentId:
+          type: ["integer", "null"]
         cardCount:
           type: integer
         createdAt:
@@ -242,6 +244,8 @@ components:
           type: string
         description:
           type: ["string", "null"]
+        parentId:
+          type: ["integer", "null"]
       required:
         - name
 
@@ -286,6 +290,8 @@ components:
           type: string
         cardCount:
           type: integer
+        parentId:
+          type: ["integer", "null"]
       required:
         - text
         - deckName

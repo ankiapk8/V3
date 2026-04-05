@@ -22,6 +22,7 @@ export const ListDecksResponseItem = zod.object({
   id: zod.number(),
   name: zod.string(),
   description: zod.string().nullish(),
+  parentId: zod.number().nullish(),
   cardCount: zod.number(),
   createdAt: zod.string(),
 });
@@ -33,6 +34,7 @@ export const ListDecksResponse = zod.array(ListDecksResponseItem);
 export const CreateDeckBody = zod.object({
   name: zod.string(),
   description: zod.string().nullish(),
+  parentId: zod.number().nullish(),
 });
 
 /**
@@ -46,6 +48,7 @@ export const GetDeckResponse = zod.object({
   id: zod.number(),
   name: zod.string(),
   description: zod.string().nullish(),
+  parentId: zod.number().nullish(),
   cardCount: zod.number(),
   createdAt: zod.string(),
 });
@@ -110,6 +113,7 @@ export const GenerateCardsBody = zod.object({
   text: zod.string(),
   deckName: zod.string(),
   cardCount: zod.number().optional(),
+  parentId: zod.number().nullish(),
 });
 
 /**

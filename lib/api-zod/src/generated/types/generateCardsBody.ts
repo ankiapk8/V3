@@ -10,4 +10,6 @@ export interface GenerateCardsBody {
   text: string;
   deckName: string;
   cardCount?: number;
+  /** @nullable */
+  parentId?: number | null;
 }

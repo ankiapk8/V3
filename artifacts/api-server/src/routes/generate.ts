@@ -12,7 +12,7 @@ router.post("/generate", async (req, res): Promise<void> => {
     return;
   }
 
-  const { text, deckName, cardCount = 15 } = parsed.data;
+  const { text, deckName, cardCount = 15, parentId } = parsed.data;
 
   if (!text || text.trim().length < 10) {
     res.status(400).json({ error: "Text is too short to generate cards from." });
@@ -21,7 +21,7 @@ router.post("/generate", async (req, res): Promise<void> => {
 
   const maxCards = Math.min(Math.max(cardCount, 1), 50);
 
-  const systemPrompt = `You are an expert Anki flashcard creator. Given source material, generate high-quality question-answer flashcards that test understanding, not just recall. 
+  const systemPrompt = `You are an expert Anki flashcard creator. Given source material, generate high-quality question-answer flashcards that test understanding, not just recall.
   
 Rules:
 - Questions should be specific and unambiguous
@@ -49,9 +49,7 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
   let generatedCards: { front: string; back: string }[] = [];
   try {
     const jsonMatch = rawContent.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      generatedCards = JSON.parse(jsonMatch[0]);
-    }
+    if (jsonMatch) generatedCards = JSON.parse(jsonMatch[0]);
   } catch {
     req.log.error({ rawContent }, "Failed to parse AI response as JSON");
     res.status(500).json({ error: "Failed to parse AI-generated cards." });
@@ -65,28 +63,17 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
 
   const [deck] = await db
     .insert(decksTable)
-    .values({ name: deckName })
+    .values({ name: deckName, parentId: parentId ?? null })
     .returning();
 
   const validCards = generatedCards
     .filter(c => c && typeof c.front === "string" && typeof c.back === "string")
-    .map(c => ({
-      deckId: deck.id,
-      front: c.front.trim(),
-      back: c.back.trim(),
-    }));
+    .map(c => ({ deckId: deck.id, front: c.front.trim(), back: c.back.trim() }));
 
-  const insertedCards = await db
-    .insert(cardsTable)
-    .values(validCards)
-    .returning();
+  const insertedCards = await db.insert(cardsTable).values(validCards).returning();
 
   res.status(201).json({
-    deck: {
-      ...deck,
-      cardCount: insertedCards.length,
-      createdAt: deck.createdAt.toISOString(),
-    },
+    deck: { ...deck, cardCount: insertedCards.length, createdAt: deck.createdAt.toISOString() },
     cards: insertedCards.map(c => ({ ...c, createdAt: c.createdAt.toISOString() })),
     generatedCount: insertedCards.length,
   });

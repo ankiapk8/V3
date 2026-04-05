@@ -39,7 +39,16 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 
 ## Database Schema
 
-- `decks` — Deck metadata (id, name, description, timestamps)
+- `decks` — Deck metadata (id, name, description, parentId FK self-ref, timestamps)
+  - `parentId` is nullable; if set, the deck is a sub-deck of the referenced deck
 - `cards` — Flashcard data (id, deckId, front, back, tags, timestamps)
+
+## Deck Hierarchy
+
+- Decks can have a `parentId` pointing to another deck (one level deep)
+- Library shows parent decks as main topics with expandable sub-decks nested below
+- "New Deck" and Generate flows have a Main Topic selector to assign `parentId`
+- Export uses Anki's `::` convention: sub-deck cards are tagged `Parent::Child`
+- Deleting a parent nullifies `parentId` on children (they become standalone)
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

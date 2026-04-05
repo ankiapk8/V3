@@ -14,6 +14,8 @@ export interface Deck {
   name: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  parentId?: number | null;
   cardCount: number;
   createdAt: string;
 }
@@ -22,6 +24,8 @@ export interface CreateDeckBody {
   name: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  parentId?: number | null;
 }
 
 export interface Card {
@@ -45,6 +49,8 @@ export interface GenerateCardsBody {
   text: string;
   deckName: string;
   cardCount?: number;
+  /** @nullable */
+  parentId?: number | null;
 }
 
 export interface GenerateCardsResponse {

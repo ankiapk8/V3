@@ -1,18 +1,22 @@
 import { useState, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useGenerateCards } from "@workspace/api-client-react";
+import { useGenerateCards, useListDecks } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { FileText, Loader2, UploadCloud, X, CheckCircle2, AlertCircle, Sparkles } from "lucide-react";
+import { FileText, Loader2, UploadCloud, X, CheckCircle2, AlertCircle, Sparkles, FolderOpen } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { createWorker } from "tesseract.js";
+import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
+
+type DeckWithParent = Deck & { parentId?: number | null };
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -34,14 +38,19 @@ export default function Home() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const generateCards = useGenerateCards();
+  const { data: allDecks } = useListDecks();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [manualText, setManualText] = useState("");
   const [manualDeckName, setManualDeckName] = useState("");
   const [manualCardCount, setManualCardCount] = useState<number | "">("");
+  const [parentId, setParentId] = useState<string>("none");
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+
+  const topicDecks = ((allDecks as DeckWithParent[]) ?? []).filter(d => !d.parentId);
+  const resolvedParentId = parentId === "none" ? null : parseInt(parentId, 10);
 
   const isExtracting = files.some(f => f.status === "extracting");
   const readyFiles = files.filter(f => f.status === "ready" || f.status === "done");
@@ -142,7 +151,7 @@ export default function Home() {
   const generateOne = (text: string, deckName: string, cardCount: number | ""): Promise<number> => {
     return new Promise((resolve, reject) => {
       generateCards.mutate(
-        { data: { text, deckName, cardCount: cardCount ? Number(cardCount) : undefined } },
+        { data: { text, deckName, cardCount: cardCount ? Number(cardCount) : undefined, parentId: resolvedParentId } },
         { onSuccess: (data) => resolve(data.generatedCount), onError: reject }
       );
     });
@@ -215,6 +224,34 @@ export default function Home() {
       </div>
 
       <div className="w-full space-y-4">
+        {/* Parent topic selector */}
+        {topicDecks.length > 0 && (
+          <Card className="border-border/50 shadow-sm">
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                  <FolderOpen className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <Label className="text-sm font-medium">Main Topic</Label>
+                  <p className="text-xs text-muted-foreground">Assign all generated decks as sub-decks of a topic</p>
+                </div>
+                <Select value={parentId} onValueChange={setParentId}>
+                  <SelectTrigger className="w-44 h-8 text-sm">
+                    <SelectValue placeholder="Standalone" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Standalone</SelectItem>
+                    {topicDecks.map(d => (
+                      <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {/* Drop zone */}
         <Card className="border-border/50 shadow-lg shadow-primary/5">
           <CardContent className="pt-5 pb-5">

@@ -21,62 +21,88 @@ router.post("/export-apkg", async (req, res): Promise<void> => {
     return;
   }
 
-  const ids = deckIds.map((id) => Number(id)).filter((id) => !isNaN(id));
+  const ids = deckIds.map(id => Number(id)).filter(id => !isNaN(id));
   if (ids.length === 0) {
     res.status(400).json({ error: "No valid deck IDs provided." });
     return;
   }
 
-  const decks = await db
+  // Fetch the requested decks
+  const requestedDecks = await db
     .select()
     .from(decksTable)
     .where(inArray(decksTable.id, ids));
 
-  if (decks.length === 0) {
+  if (requestedDecks.length === 0) {
     res.status(404).json({ error: "No matching decks found." });
     return;
   }
 
-  const cards = await db
+  // For parent decks, also fetch their sub-decks automatically
+  const parentIds = requestedDecks.filter(d => d.parentId === null).map(d => d.id);
+  let subDecks: typeof requestedDecks = [];
+  if (parentIds.length > 0) {
+    subDecks = await db
+      .select()
+      .from(decksTable)
+      .where(inArray(decksTable.parentId, parentIds));
+  }
+
+  // Build full set: requested decks + their sub-decks (deduplicated)
+  const allDeckIds = [...new Set([...ids, ...subDecks.map(d => d.id)])];
+  const allDecks = [...requestedDecks, ...subDecks.filter(s => !ids.includes(s.id))];
+
+  // Fetch all cards
+  const allCards = await db
     .select()
     .from(cardsTable)
-    .where(inArray(cardsTable.deckId, ids))
+    .where(inArray(cardsTable.deckId, allDeckIds))
     .orderBy(cardsTable.createdAt);
 
-  if (cards.length === 0) {
+  if (allCards.length === 0) {
     res.status(400).json({ error: "Selected decks have no cards to export." });
     return;
   }
 
-  const deckLabel =
-    exportName?.trim() ||
-    (decks.length === 1 ? decks[0].name : `${decks.length} Decks`);
+  // Build a map: deckId → full Anki deck name (using :: for sub-decks)
+  const deckById = new Map(allDecks.map(d => [d.id, d]));
+  const getAnkiDeckName = (deckId: number): string => {
+    const deck = deckById.get(deckId);
+    if (!deck) return exportName ?? "Exported Deck";
+    if (deck.parentId) {
+      const parent = deckById.get(deck.parentId);
+      if (parent) return `${parent.name}::${deck.name}`;
+    }
+    return deck.name;
+  };
 
-  const apkg = AnkiExport(deckLabel);
+  // Determine the root deck name for the .apkg container
+  const rootLabel = exportName?.trim() ||
+    (requestedDecks.length === 1 ? requestedDecks[0].name : `${requestedDecks.length} Decks`);
 
-  for (const card of cards) {
-    const tags = card.tags
-      ? card.tags
-          .split(/[\s,]+/)
-          .map((t: string) => t.trim())
-          .filter(Boolean)
+  const apkg = AnkiExport(rootLabel);
+
+  for (const card of allCards) {
+    const deckName = getAnkiDeckName(card.deckId);
+    const baseTags = card.tags
+      ? card.tags.split(/[\s,]+/).map((t: string) => t.trim()).filter(Boolean)
       : [];
-    apkg.addCard(card.front, card.back, { tags });
+    // Tag each card with its sub-deck name so users can filter in Anki
+    const subDeckTag = deckName.includes("::") ? deckName.split("::").pop()! : undefined;
+    const tags = subDeckTag ? [...baseTags, subDeckTag.replace(/\s+/g, "_")] : baseTags;
+    apkg.addCard(card.front, card.back, { tags, deckName });
   }
 
   const zipBuffer: Buffer = await apkg.save();
 
-  const safeName = deckLabel.replace(/[^a-z0-9_\-]/gi, "_");
+  const safeName = rootLabel.replace(/[^a-z0-9_\-]/gi, "_");
   res.setHeader("Content-Type", "application/octet-stream");
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${safeName}.apkg"`,
-  );
+  res.setHeader("Content-Disposition", `attachment; filename="${safeName}.apkg"`);
   res.setHeader("Content-Length", zipBuffer.length);
 
   req.log.info(
-    { deckCount: decks.length, cardCount: cards.length },
-    "Exported .apkg",
+    { deckCount: allDecks.length, cardCount: allCards.length, subDeckCount: subDecks.length },
+    "Exported .apkg"
   );
 
   res.end(zipBuffer);

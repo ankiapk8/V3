@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, isNull } from "drizzle-orm";
 import { db, decksTable, cardsTable } from "@workspace/db";
 import {
   CreateDeckBody,
@@ -17,6 +17,7 @@ router.get("/decks", async (_req, res): Promise<void> => {
       id: decksTable.id,
       name: decksTable.name,
       description: decksTable.description,
+      parentId: decksTable.parentId,
       createdAt: decksTable.createdAt,
       cardCount: sql<number>`cast(count(${cardsTable.id}) as int)`,
     })
@@ -57,6 +58,7 @@ router.get("/decks/:id", async (req, res): Promise<void> => {
       id: decksTable.id,
       name: decksTable.name,
       description: decksTable.description,
+      parentId: decksTable.parentId,
       createdAt: decksTable.createdAt,
       cardCount: sql<number>`cast(count(${cardsTable.id}) as int)`,
     })
@@ -70,7 +72,27 @@ router.get("/decks/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  res.json({ ...row, createdAt: row.createdAt.toISOString() });
+  // Also fetch sub-decks if this is a parent
+  const subDecks = await db
+    .select({
+      id: decksTable.id,
+      name: decksTable.name,
+      description: decksTable.description,
+      parentId: decksTable.parentId,
+      createdAt: decksTable.createdAt,
+      cardCount: sql<number>`cast(count(${cardsTable.id}) as int)`,
+    })
+    .from(decksTable)
+    .leftJoin(cardsTable, eq(cardsTable.deckId, decksTable.id))
+    .where(eq(decksTable.parentId, params.data.id))
+    .groupBy(decksTable.id)
+    .orderBy(decksTable.createdAt);
+
+  res.json({
+    ...row,
+    createdAt: row.createdAt.toISOString(),
+    subDecks: subDecks.map(s => ({ ...s, createdAt: s.createdAt.toISOString() })),
+  });
 });
 
 router.delete("/decks/:id", async (req, res): Promise<void> => {
@@ -80,6 +102,12 @@ router.delete("/decks/:id", async (req, res): Promise<void> => {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  // Nullify parentId on children before deleting parent
+  await db
+    .update(decksTable)
+    .set({ parentId: null })
+    .where(eq(decksTable.parentId, params.data.id));
 
   const [deleted] = await db
     .delete(decksTable)
@@ -142,13 +170,7 @@ router.get("/decks/:id/export", async (req, res): Promise<void> => {
     return tags ? `${front}\t${back}\t${tags}` : `${front}\t${back}`;
   });
 
-  const csv = rows.join("\n");
-
-  res.json({
-    deckName: deck.name,
-    csv,
-    cardCount: cards.length,
-  });
+  res.json({ deckName: deck.name, csv: rows.join("\n"), cardCount: cards.length });
 });
 
 export default router;

@@ -10,4 +10,6 @@ export interface CreateDeckBody {
   name: string;
   /** @nullable */
   description?: string | null;
+  /** @nullable */
+  parentId?: number | null;
 }
