@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FileText, Loader2, UploadCloud } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import { createWorker } from "tesseract.js";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -23,6 +24,8 @@ export default function Home() {
   const [deckName, setDeckName] = useState("");
   const [cardCount, setCardCount] = useState<number | "">("");
   const [fileName, setFileName] = useState("");
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractionProgress, setExtractionProgress] = useState("");
 
   const extractPdfText = async (buffer: ArrayBuffer): Promise<string> => {
     const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
@@ -37,6 +40,35 @@ export default function Home() {
         .join(" ");
       pageTexts.push(pageText);
     }
+    return pageTexts.join("\n").replace(/\s+/g, " ").trim();
+  };
+
+  const ocrPdfPages = async (buffer: ArrayBuffer): Promise<string> => {
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+    const pdf = await loadingTask.promise;
+    const totalPages = pdf.numPages;
+
+    const worker = await createWorker("eng");
+    const pageTexts: string[] = [];
+
+    for (let i = 1; i <= totalPages; i++) {
+      setExtractionProgress(`Reading page ${i} of ${totalPages} (OCR)…`);
+      const page = await pdf.getPage(i);
+      const viewport = page.getViewport({ scale: 2.0 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d")!;
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      const blob = await new Promise<Blob>((resolve) =>
+        canvas.toBlob((b) => resolve(b!), "image/png")
+      );
+      const { data } = await worker.recognize(blob);
+      pageTexts.push(data.text);
+    }
+
+    await worker.terminate();
     return pageTexts.join("\n").replace(/\s+/g, " ").trim();
   };
 
@@ -70,19 +102,43 @@ export default function Home() {
       };
       reader.readAsText(file);
     } else if (isPdf) {
+      setIsExtracting(true);
+      setExtractionProgress("Reading PDF…");
       const reader = new FileReader();
       reader.onload = async (event) => {
         const buffer = event.target?.result as ArrayBuffer;
-        const extracted = await extractPdfText(buffer);
-        if (extracted && extracted.length > 20) {
-          setText(extracted);
-          toast({ title: "PDF loaded", description: `Extracted text from ${file.name}.` });
-        } else {
+        try {
+          const extracted = await extractPdfText(buffer);
+          if (extracted && extracted.length > 20) {
+            setText(extracted);
+            toast({ title: "PDF loaded", description: `Extracted text from ${file.name}.` });
+          } else {
+            toast({
+              title: "Scanned PDF detected",
+              description: "No text layer found — running OCR. This may take a moment.",
+            });
+            setExtractionProgress("Starting OCR…");
+            const ocrText = await ocrPdfPages(buffer);
+            if (ocrText && ocrText.length > 20) {
+              setText(ocrText);
+              toast({ title: "OCR complete", description: `Text extracted from ${file.name} via OCR.` });
+            } else {
+              toast({
+                title: "Extraction failed",
+                description: "Could not extract any text. Try copy-pasting the content directly.",
+                variant: "destructive",
+              });
+            }
+          }
+        } catch {
           toast({
-            title: "PDF extraction limited",
-            description: "Could not extract text from this PDF. Try copy-pasting the content directly.",
+            title: "Extraction error",
+            description: "An error occurred while processing the PDF.",
             variant: "destructive",
           });
+        } finally {
+          setIsExtracting(false);
+          setExtractionProgress("");
         }
       };
       reader.readAsArrayBuffer(file);
@@ -151,28 +207,32 @@ export default function Home() {
               className="min-h-[200px] resize-none text-base"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              disabled={generateCards.isPending}
+              disabled={generateCards.isPending || isExtracting}
             />
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <input
               ref={fileInputRef}
               type="file"
               className="hidden"
               onChange={handleFileUpload}
               accept=".txt,.pdf"
-              disabled={generateCards.isPending}
+              disabled={generateCards.isPending || isExtracting}
             />
             <Button
               type="button"
               variant="outline"
               className="flex gap-2 items-center justify-center"
               onClick={() => fileInputRef.current?.click()}
-              disabled={generateCards.isPending}
+              disabled={generateCards.isPending || isExtracting}
             >
-              <UploadCloud className="h-4 w-4" />
-              {fileName ? fileName : "Upload File (PDF, TXT)"}
+              {isExtracting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <UploadCloud className="h-4 w-4" />
+              )}
+              {isExtracting ? extractionProgress || "Processing…" : fileName ? fileName : "Upload File (PDF, TXT)"}
             </Button>
           </div>
 
@@ -184,7 +244,7 @@ export default function Home() {
                 placeholder="e.g. Biology 101 Midterm"
                 value={deckName}
                 onChange={(e) => setDeckName(e.target.value)}
-                disabled={generateCards.isPending}
+                disabled={generateCards.isPending || isExtracting}
               />
             </div>
             <div className="space-y-2">
@@ -197,7 +257,7 @@ export default function Home() {
                 max="100"
                 value={cardCount}
                 onChange={(e) => setCardCount(e.target.value ? Number(e.target.value) : "")}
-                disabled={generateCards.isPending}
+                disabled={generateCards.isPending || isExtracting}
               />
             </div>
           </div>
@@ -206,7 +266,7 @@ export default function Home() {
             className="w-full py-6 text-lg font-medium"
             size="lg"
             onClick={handleGenerate}
-            disabled={generateCards.isPending || !text.trim() || !deckName.trim()}
+            disabled={generateCards.isPending || isExtracting || !text.trim() || !deckName.trim()}
           >
             {generateCards.isPending ? (
               <>
