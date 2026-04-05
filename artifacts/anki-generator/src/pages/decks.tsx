@@ -1,16 +1,14 @@
 import { Link } from "wouter";
-import { useListDecks, useCreateDeck, useDeleteDeck, getListDecksQueryKey } from "@workspace/api-client-react";
+import { useListDecks, useDeleteDeck, getListDecksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { GenerateSheet } from "@/components/generate-sheet";
 import { Trash2, Layers, Plus, Download, CheckSquare, X, Search, FileText } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -18,13 +16,10 @@ import { useToast } from "@/hooks/use-toast";
 export default function Decks() {
   const { data: decks, isLoading } = useListDecks();
   const deleteDeck = useDeleteDeck();
-  const createDeck = useCreateDeck();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
-  const [createOpen, setCreateOpen] = useState(false);
-  const [newDeckName, setNewDeckName] = useState("");
-  const [newDeckDesc, setNewDeckDesc] = useState("");
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState("");
 
   const [selectMode, setSelectMode] = useState(false);
@@ -32,7 +27,6 @@ export default function Decks() {
   const [exporting, setExporting] = useState(false);
 
   const totalCards = decks?.reduce((sum, d) => sum + d.cardCount, 0) ?? 0;
-
   const filteredDecks = useMemo(() => {
     const sorted = [...(decks ?? [])].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -41,22 +35,6 @@ export default function Decks() {
     const q = search.toLowerCase();
     return sorted.filter(d => d.name.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q));
   }, [decks, search]);
-
-  const handleCreate = () => {
-    if (!newDeckName.trim()) return;
-    createDeck.mutate(
-      { data: { name: newDeckName, description: newDeckDesc } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
-          setCreateOpen(false);
-          setNewDeckName("");
-          setNewDeckDesc("");
-          toast({ title: "Deck created successfully." });
-        },
-      }
-    );
-  };
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.preventDefault();
@@ -146,34 +124,10 @@ export default function Decks() {
                   Select
                 </Button>
               )}
-              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                <DialogTrigger asChild>
-                  <Button className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    New Deck
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Create New Deck</DialogTitle>
-                    <DialogDescription>Create an empty deck to add cards to later.</DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Name</Label>
-                      <Input id="name" value={newDeckName} onChange={e => setNewDeckName(e.target.value)} placeholder="e.g. Spanish Vocab" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="desc">Description (Optional)</Label>
-                      <Textarea id="desc" value={newDeckDesc} onChange={e => setNewDeckDesc(e.target.value)} placeholder="What is this deck for?" />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-                    <Button onClick={handleCreate} disabled={!newDeckName.trim() || createDeck.isPending}>Create</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+              <Button className="gap-2" onClick={() => setSheetOpen(true)}>
+                <Plus className="h-4 w-4" />
+                New Deck
+              </Button>
             </>
           ) : (
             <>
@@ -219,9 +173,9 @@ export default function Decks() {
           <Layers className="mx-auto h-12 w-12 text-muted-foreground opacity-50" />
           <h3 className="mt-4 text-lg font-medium">No decks yet</h3>
           <p className="text-muted-foreground mt-1 mb-4">Start by generating cards from your study material.</p>
-          <Link href="/generate">
-            <Button>Generate Cards</Button>
-          </Link>
+          <Button onClick={() => setSheetOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> New Deck
+          </Button>
         </div>
       ) : filteredDecks.length === 0 ? (
         <div className="text-center py-16 border-2 border-dashed rounded-xl bg-card">
@@ -296,6 +250,8 @@ export default function Decks() {
           })}
         </div>
       )}
+
+      <GenerateSheet open={sheetOpen} onOpenChange={setSheetOpen} />
 
       {/* Floating export bar */}
       {selectMode && (
