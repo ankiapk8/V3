@@ -8,6 +8,10 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Loader2, UploadCloud } from "lucide-react";
+import * as pdfjsLib from "pdfjs-dist";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 export default function Home() {
   const [, setLocation] = useLocation();
@@ -21,37 +25,19 @@ export default function Home() {
   const [fileName, setFileName] = useState("");
 
   const extractPdfText = async (buffer: ArrayBuffer): Promise<string> => {
-    const bytes = new Uint8Array(buffer);
-    const raw = new TextDecoder("latin1").decode(bytes);
-    const textParts: string[] = [];
-    const streamRegex = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    let match;
-    while ((match = streamRegex.exec(raw)) !== null) {
-      const streamContent = match[1];
-      const tjRegex = /\(((?:[^()\\]|\\.)*)\)\s*Tj/g;
-      let tjMatch;
-      while ((tjMatch = tjRegex.exec(streamContent)) !== null) {
-        const decoded = tjMatch[1]
-          .replace(/\\n/g, "\n")
-          .replace(/\\r/g, "\r")
-          .replace(/\\t/g, "\t")
-          .replace(/\\\(/g, "(")
-          .replace(/\\\)/g, ")")
-          .replace(/\\\\/g, "\\");
-        textParts.push(decoded);
-      }
-      const tdRegex = /\[((?:[^\[\]]|\\.)*)\]\s*TJ/g;
-      let tdMatch;
-      while ((tdMatch = tdRegex.exec(streamContent)) !== null) {
-        const inner = tdMatch[1];
-        const strRegex = /\(((?:[^()\\]|\\.)*)\)/g;
-        let strMatch;
-        while ((strMatch = strRegex.exec(inner)) !== null) {
-          textParts.push(strMatch[1]);
-        }
-      }
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
+    const pdf = await loadingTask.promise;
+    const pageTexts: string[] = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      const pageText = content.items
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .map((item: any) => (typeof item.str === "string" ? item.str : ""))
+        .join(" ");
+      pageTexts.push(pageText);
     }
-    return textParts.join(" ").replace(/\s+/g, " ").trim();
+    return pageTexts.join("\n").replace(/\s+/g, " ").trim();
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
