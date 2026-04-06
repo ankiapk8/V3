@@ -219,19 +219,26 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
               </Label>
               <Select value={parentId} onValueChange={setParentId} disabled={isSaving}>
                 <SelectTrigger>
-                  <SelectValue placeholder={mode.type === "new-subdeck" ? "Select a parent deck…" : "No parent — standalone"} />
+                  {parentId === "none" || !selectedParentOpt
+                    ? <span className="text-muted-foreground text-sm">{mode.type === "new-subdeck" ? "Select a parent deck…" : "No parent — standalone"}</span>
+                    : <span className="text-sm truncate">{selectedParentOpt.label}</span>
+                  }
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-64">
                   {mode.type === "edit" && <SelectItem value="none">No parent — standalone deck</SelectItem>}
                   {parentOptions.map(opt => (
-                    <SelectItem key={opt.id} value={opt.id.toString()}>
-                      <span style={{ paddingLeft: `${opt.depth * 12}px` }} className="inline-flex items-center gap-1">
-                        {opt.depth > 0 && <span className="text-muted-foreground text-xs">{"›".repeat(opt.depth)}</span>}
-                        {opt.label.split(" › ").pop()}
+                    <SelectItem key={opt.id} value={opt.id.toString()} className="py-1.5">
+                      <span className="flex items-center gap-1 min-w-0">
+                        {opt.depth > 0 && (
+                          <span className="text-muted-foreground shrink-0 text-xs font-mono">
+                            {"  ".repeat(opt.depth - 1)}{"└─"}
+                          </span>
+                        )}
+                        <span className="truncate">{opt.label.split(" › ").pop()}</span>
+                        {opt.depth === 0 && (
+                          <span className="text-xs text-muted-foreground ml-1 shrink-0">(topic)</span>
+                        )}
                       </span>
-                      {opt.depth > 0 && (
-                        <span className="text-xs text-muted-foreground ml-1.5">({opt.label})</span>
-                      )}
                     </SelectItem>
                   ))}
                   {parentOptions.length === 0 && mode.type === "new-subdeck" && (

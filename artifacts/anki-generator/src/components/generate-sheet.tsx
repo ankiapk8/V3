@@ -248,33 +248,48 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
   const totalTargets = readyFiles.length + (hasManual ? 1 : 0);
 
-  const ParentSelector = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <div className="space-y-1.5">
-      <Label className="text-sm flex items-center gap-1.5">
-        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-        Parent Deck <span className="text-muted-foreground font-normal">(optional)</span>
-      </Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="h-8 text-sm">
-          <SelectValue placeholder="No parent — standalone deck" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="none">No parent — standalone deck</SelectItem>
-          {parentOptions.map(opt => (
-            <SelectItem key={opt.id} value={opt.id.toString()}>
-              <span style={{ paddingLeft: `${opt.depth * 12}px` }} className="inline-flex items-center gap-1">
-                {opt.depth > 0 && <span className="text-muted-foreground">{"›".repeat(opt.depth)}</span>}
-                {opt.label.split(" › ").pop()}
-              </span>
-              {opt.depth > 0 && (
-                <span className="text-xs text-muted-foreground ml-1.5">({opt.label})</span>
-              )}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
-  );
+  const ParentSelector = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => {
+    const selected = parentOptions.find(o => o.id.toString() === value);
+    return (
+      <div className="space-y-1.5">
+        <Label className="text-sm flex items-center gap-1.5">
+          <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+          Parent Deck <span className="text-muted-foreground font-normal">(optional)</span>
+        </Label>
+        <Select value={value} onValueChange={onChange}>
+          <SelectTrigger className="h-8 text-sm">
+            {value === "none" || !selected
+              ? <span className="text-muted-foreground">No parent — standalone deck</span>
+              : <span className="truncate">{selected.label}</span>
+            }
+          </SelectTrigger>
+          <SelectContent className="max-h-64">
+            <SelectItem value="none">No parent — standalone deck</SelectItem>
+            {parentOptions.map(opt => (
+              <SelectItem key={opt.id} value={opt.id.toString()} className="py-1.5">
+                <span className="flex items-center gap-1 min-w-0">
+                  {opt.depth > 0 && (
+                    <span className="text-muted-foreground shrink-0 text-xs font-mono">
+                      {"  ".repeat(opt.depth - 1)}{"└─"}
+                    </span>
+                  )}
+                  <span className="truncate">{opt.label.split(" › ").pop()}</span>
+                  {opt.depth === 0 && (
+                    <span className="text-xs text-muted-foreground ml-1 shrink-0">(topic)</span>
+                  )}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {selected && selected.depth > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Cards will be added inside <span className="font-medium">{selected.label}</span>
+          </p>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
