@@ -42,10 +42,11 @@ export default function Decks() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [collapsedTopics, setCollapsedTopics] = useState<Set<number>>(new Set());
+  const [collapsedSubs, setCollapsedSubs] = useState<Set<number>>(new Set());
 
   const totalCards = (decks as DeckWithParent[] | undefined)?.reduce((sum, d) => sum + d.cardCount, 0) ?? 0;
 
-  const { rootDecks, subDecksByParent } = useMemo(() => {
+  const { rootDecks, deckChildrenMap } = useMemo(() => {
     const all = (decks as DeckWithParent[] | undefined) ?? [];
     const root = all.filter(d => !d.parentId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     const byParent = new Map<number, DeckWithParent[]>();
@@ -54,18 +55,21 @@ export default function Decks() {
       if (!byParent.has(pid)) byParent.set(pid, []);
       byParent.get(pid)!.push(d);
     });
-    return { rootDecks: root, subDecksByParent: byParent };
+    return { rootDecks: root, deckChildrenMap: byParent };
   }, [decks]);
 
   const filteredRoot = useMemo(() => {
     if (!search.trim()) return rootDecks;
     const q = search.toLowerCase();
-    return rootDecks.filter(d =>
-      d.name.toLowerCase().includes(q) ||
-      d.description?.toLowerCase().includes(q) ||
-      (subDecksByParent.get(d.id) ?? []).some(s => s.name.toLowerCase().includes(q))
-    );
-  }, [rootDecks, subDecksByParent, search]);
+    return rootDecks.filter(d => {
+      if (d.name.toLowerCase().includes(q) || d.description?.toLowerCase().includes(q)) return true;
+      const subs = deckChildrenMap.get(d.id) ?? [];
+      return subs.some(s =>
+        s.name.toLowerCase().includes(q) ||
+        (deckChildrenMap.get(s.id) ?? []).some(ss => ss.name.toLowerCase().includes(q))
+      );
+    });
+  }, [rootDecks, deckChildrenMap, search]);
 
   const allSelectableIds = useMemo(() =>
     ((decks as DeckWithParent[] | undefined) ?? []).map(d => d.id),
@@ -76,7 +80,7 @@ export default function Decks() {
 
   const handleDelete = (id: number, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
-    if (!confirm("Delete this deck? Sub-decks will become standalone.")) return;
+    if (!confirm("Delete this deck? Child decks will become standalone.")) return;
     deleteDeck.mutate({ id }, {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
@@ -89,6 +93,11 @@ export default function Decks() {
   const toggleCollapse = (id: number, e: React.MouseEvent) => {
     e.preventDefault(); e.stopPropagation();
     setCollapsedTopics(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const toggleCollapseSub = (id: number, e: React.MouseEvent) => {
+    e.preventDefault(); e.stopPropagation();
+    setCollapsedSubs(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   };
 
   const toggleSelect = (id: number, e: React.MouseEvent) => {
@@ -121,7 +130,7 @@ export default function Decks() {
       const a = Object.assign(document.createElement("a"), { href: url, download: `${exportName.replace(/[^a-z0-9_\-]/gi, "_")}.apkg` });
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
-      toast({ title: "Export complete", description: `Downloaded ${exportName}.apkg (sub-decks included).` });
+      toast({ title: "Export complete", description: `Downloaded ${exportName}.apkg (all nested decks included).` });
     } catch (err) {
       toast({ title: "Export failed", description: err instanceof Error ? err.message : "Something went wrong.", variant: "destructive" });
     } finally { setExporting(false); }
@@ -146,11 +155,9 @@ export default function Decks() {
                   <CheckSquare className="h-4 w-4" /> Select
                 </Button>
               )}
-              {/* New Topic button */}
               <Button variant="outline" className="gap-2" onClick={() => openDeckForm({ type: "new-topic" })}>
                 <FolderOpen className="h-4 w-4" /> New Topic
               </Button>
-              {/* New Deck dropdown */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button className="gap-2">
@@ -236,11 +243,12 @@ export default function Decks() {
       ) : (
         <div className="space-y-3">
           {filteredRoot.map((deck, idx) => {
-            const subDecks = subDecksByParent.get(deck.id) ?? [];
+            const subDecks = (deckChildrenMap.get(deck.id) ?? []).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
             const isCollapsed = collapsedTopics.has(deck.id);
             const hasSubDecks = subDecks.length > 0;
             const isSelected = selectedIds.has(deck.id);
-            const totalTopicCards = deck.cardCount + subDecks.reduce((s, d) => s + d.cardCount, 0);
+            const allDescendants = getAllDescendants(deck.id, deckChildrenMap);
+            const totalTopicCards = deck.cardCount + allDescendants.reduce((s, d) => s + d.cardCount, 0);
 
             return (
               <div key={deck.id} className="animate-in fade-in slide-in-from-bottom-2" style={{ animationDelay: `${idx * 40}ms` }}>
@@ -318,12 +326,16 @@ export default function Decks() {
                 {/* Sub-decks */}
                 {hasSubDecks && !isCollapsed && (
                   <div className="ml-6 mt-1.5 space-y-1 border-l-2 border-primary/20 pl-4">
-                    {subDecks
-                      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                      .map(sub => {
-                        const subSelected = selectedIds.has(sub.id);
-                        return (
-                          <div key={sub.id} className="relative group">
+                    {subDecks.map(sub => {
+                      const subSubDecks = (deckChildrenMap.get(sub.id) ?? []).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+                      const hasSubSubs = subSubDecks.length > 0;
+                      const subSelected = selectedIds.has(sub.id);
+                      const isSubCollapsed = collapsedSubs.has(sub.id);
+                      const subTotalCards = sub.cardCount + subSubDecks.reduce((s, d) => s + d.cardCount, 0);
+
+                      return (
+                        <div key={sub.id}>
+                          <div className="relative group">
                             {selectMode && (
                               <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10" onClick={e => toggleSelect(sub.id, e)}>
                                 <Checkbox checked={subSelected} className="h-4 w-4 bg-background border-2 shadow-sm" />
@@ -340,16 +352,28 @@ export default function Decks() {
                               >
                                 <CardContent className="py-2.5 px-3">
                                   <div className="flex items-center gap-2.5">
-                                    <div className="h-7 w-7 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0">
-                                      <FileText className="h-3.5 w-3.5 text-blue-500" />
+                                    {hasSubSubs && !selectMode && (
+                                      <button className="text-muted-foreground hover:text-foreground shrink-0" onClick={e => toggleCollapseSub(sub.id, e)}>
+                                        {isSubCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                                      </button>
+                                    )}
+                                    <div className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${hasSubSubs ? "bg-blue-500/15" : "bg-blue-500/10"}`}>
+                                      {hasSubSubs ? <FolderOpen className="h-3.5 w-3.5 text-blue-500" /> : <FileText className="h-3.5 w-3.5 text-blue-500" />}
                                     </div>
                                     <div className={`flex-1 min-w-0 ${selectMode ? "pl-5" : ""}`}>
-                                      <p className="text-sm font-medium truncate">{sub.name}</p>
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="text-sm font-medium truncate">{sub.name}</p>
+                                        {hasSubSubs && (
+                                          <Badge variant="outline" className="text-xs shrink-0 py-0 px-1.5">
+                                            {subSubDecks.length}
+                                          </Badge>
+                                        )}
+                                      </div>
                                       <p className="text-xs text-muted-foreground">{format(new Date(sub.createdAt), "MMM d, yyyy")}</p>
                                     </div>
                                     <div className="flex items-center gap-1 shrink-0">
                                       <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
-                                        {sub.cardCount} card{sub.cardCount !== 1 ? "s" : ""}
+                                        {hasSubSubs ? subTotalCards : sub.cardCount} card{(hasSubSubs ? subTotalCards : sub.cardCount) !== 1 ? "s" : ""}
                                       </span>
                                       {!selectMode && (
                                         <div className="flex items-center gap-0.5">
@@ -377,9 +401,97 @@ export default function Decks() {
                               </Card>
                             </Link>
                           </div>
-                        );
-                      })}
-                    {/* Add sub-deck inline button */}
+
+                          {/* Sub-sub-decks */}
+                          {hasSubSubs && !isSubCollapsed && (
+                            <div className="ml-5 mt-1 space-y-1 border-l-2 border-blue-200/40 pl-3">
+                              {subSubDecks.map(subsub => {
+                                const subSubSelected = selectedIds.has(subsub.id);
+                                return (
+                                  <div key={subsub.id} className="relative group">
+                                    {selectMode && (
+                                      <div className="absolute left-3 top-1/2 -translate-y-1/2 z-10" onClick={e => toggleSelect(subsub.id, e)}>
+                                        <Checkbox checked={subSubSelected} className="h-3.5 w-3.5 bg-background border-2 shadow-sm" />
+                                      </div>
+                                    )}
+                                    <Link href={selectMode ? "#" : `/decks/${subsub.id}`}>
+                                      <Card
+                                        className={`cursor-pointer transition-all border shadow-sm ${
+                                          selectMode
+                                            ? subSubSelected ? "border-primary ring-1 ring-primary/10 bg-primary/5" : "border-border/20 opacity-80"
+                                            : "hover:border-primary/20 hover:shadow-sm border-border/20 bg-muted/30"
+                                        }`}
+                                        onClick={selectMode ? e => toggleSelect(subsub.id, e as React.MouseEvent) : undefined}
+                                      >
+                                        <CardContent className="py-2 px-3">
+                                          <div className="flex items-center gap-2">
+                                            <div className={`h-6 w-6 rounded flex items-center justify-center shrink-0 bg-violet-500/10 ${selectMode ? "ml-5" : ""}`}>
+                                              <Layers className="h-3 w-3 text-violet-500" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-xs font-medium truncate">{subsub.name}</p>
+                                            </div>
+                                            <div className="flex items-center gap-1 shrink-0">
+                                              <span className="text-xs text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                                                {subsub.cardCount} card{subsub.cardCount !== 1 ? "s" : ""}
+                                              </span>
+                                              {!selectMode && (
+                                                <div className="flex items-center gap-0.5">
+                                                  <Button
+                                                    variant="ghost" size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                                                    title="Edit"
+                                                    onClick={e => { e.preventDefault(); e.stopPropagation(); openDeckForm({ type: "edit", deck: subsub }); }}
+                                                  >
+                                                    <Pencil className="h-2.5 w-2.5" />
+                                                  </Button>
+                                                  <Button
+                                                    variant="ghost" size="icon"
+                                                    className="h-6 w-6 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                    title="Delete"
+                                                    onClick={e => handleDelete(subsub.id, e)}
+                                                  >
+                                                    <Trash2 className="h-2.5 w-2.5" />
+                                                  </Button>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        </CardContent>
+                                      </Card>
+                                    </Link>
+                                  </div>
+                                );
+                              })}
+                              {!selectMode && (
+                                <button
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:text-blue-500 transition-colors rounded-md hover:bg-blue-500/5"
+                                  onClick={() => openDeckForm({ type: "new-subdeck", parentId: sub.id })}
+                                >
+                                  <Plus className="h-3 w-3" />
+                                  Add sub-sub-deck to <span className="font-medium">{sub.name}</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+
+                          {/* Add sub-sub-deck button when sub-deck has no children yet */}
+                          {!hasSubSubs && !selectMode && (
+                            <div className="ml-5 mt-0.5">
+                              <button
+                                className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground hover:text-blue-500 transition-colors rounded hover:bg-blue-500/5"
+                                onClick={() => openDeckForm({ type: "new-subdeck", parentId: sub.id })}
+                              >
+                                <Plus className="h-3 w-3" />
+                                Add sub-sub-deck
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Add sub-deck to root topic */}
                     {!selectMode && (
                       <button
                         className="w-full flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:text-primary transition-colors rounded-md hover:bg-primary/5"
@@ -416,4 +528,9 @@ export default function Decks() {
       )}
     </div>
   );
+}
+
+function getAllDescendants(deckId: number, childrenMap: Map<number, DeckWithParent[]>): DeckWithParent[] {
+  const direct = childrenMap.get(deckId) ?? [];
+  return [...direct, ...direct.flatMap(d => getAllDescendants(d.id, childrenMap))];
 }

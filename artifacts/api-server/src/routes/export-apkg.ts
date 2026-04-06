@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { createRequire } from "module";
 import { createHash } from "crypto";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db, decksTable, cardsTable } from "@workspace/db";
 
 const require = createRequire(import.meta.url);
@@ -20,13 +20,6 @@ function ankiChecksum(str: string): number {
 
 const SEPARATOR = "\u001F";
 
-/**
- * Add a sub-deck entry to the collection's decks JSON.
- * db: the sql.js Database instance from AnkiExport
- * deckId: new unique integer ID for this sub-deck
- * deckName: full deck name using :: notation e.g. "Family medicine::Chapter 1"
- * templateDeck: the parent deck object to clone structure from
- */
 function addDeckEntry(sqlDb: any, deckId: number, deckName: string, templateDeck: Record<string, unknown>): void {
   const raw = sqlDb.exec("SELECT decks FROM col WHERE id=1");
   const decks = JSON.parse(raw[0].values[0][0] as string);
@@ -39,11 +32,6 @@ function addDeckEntry(sqlDb: any, deckId: number, deckName: string, templateDeck
   sqlDb.prepare("UPDATE col SET decks=:d WHERE id=1").getAsObject({ ":d": JSON.stringify(decks) });
 }
 
-/**
- * Insert a note + card directly into the sql.js database.
- * deckId: which deck this card belongs to
- * modelId: note type (model) id — re-use the parent deck's model
- */
 function insertNoteAndCard(
   sqlDb: any,
   { front, back, tags, deckId, modelId, idOffset }: {
@@ -98,6 +86,42 @@ function insertNoteAndCard(
   });
 }
 
+/**
+ * Recursively register all descendant decks in the Anki SQLite col.decks JSON.
+ * Returns the updated idCounter.
+ */
+function registerDescendants(
+  allDecks: (typeof decksTable.$inferSelect)[],
+  parentDbId: number,
+  parentAnkiName: string,
+  idCounter: number,
+  ankiDeckIdMap: Map<number, { ankiId: number; ankiName: string }>,
+  sqlDb: any,
+  templateDeck: Record<string, unknown>
+): number {
+  const children = allDecks.filter(d => d.parentId === parentDbId);
+  for (const child of children) {
+    const ankiName = `${parentAnkiName}::${child.name}`;
+    const ankiId = idCounter++;
+    addDeckEntry(sqlDb, ankiId, ankiName, templateDeck);
+    ankiDeckIdMap.set(child.id, { ankiId, ankiName });
+    idCounter = registerDescendants(allDecks, child.id, ankiName, idCounter, ankiDeckIdMap, sqlDb, templateDeck);
+  }
+  return idCounter;
+}
+
+/**
+ * Collect all descendant IDs for a set of deck IDs (recursive, in-memory).
+ */
+function collectAllDescendantIds(
+  allDecks: (typeof decksTable.$inferSelect)[],
+  parentIds: number[]
+): number[] {
+  const direct = allDecks.filter(d => d.parentId !== null && parentIds.includes(d.parentId!));
+  if (direct.length === 0) return [];
+  return [...direct.map(d => d.id), ...collectAllDescendantIds(allDecks, direct.map(d => d.id))];
+}
+
 router.post("/export-apkg", async (req, res): Promise<void> => {
   const { deckIds, exportName } = req.body as {
     deckIds?: number[];
@@ -115,22 +139,22 @@ router.post("/export-apkg", async (req, res): Promise<void> => {
     return;
   }
 
+  // Fetch ALL decks from DB so we can resolve the full hierarchy in-memory
+  const allDecksInDb = await db.select().from(decksTable);
+
   // Fetch requested decks
-  const requestedDecks = await db.select().from(decksTable).where(inArray(decksTable.id, ids));
+  const requestedDecks = allDecksInDb.filter(d => ids.includes(d.id));
   if (requestedDecks.length === 0) {
     res.status(404).json({ error: "No matching decks found." });
     return;
   }
 
-  // For every parent (root) deck selected, also pull in its sub-decks automatically
-  const selectedParentIds = requestedDecks.filter(d => !d.parentId).map(d => d.id);
-  let autoSubDecks: typeof requestedDecks = [];
-  if (selectedParentIds.length > 0) {
-    autoSubDecks = await db.select().from(decksTable).where(inArray(decksTable.parentId, selectedParentIds));
-  }
+  // Auto-include ALL descendants of selected decks (any depth)
+  const allDescendantIds = collectAllDescendantIds(allDecksInDb, ids);
+  const autoDecks = allDecksInDb.filter(d => allDescendantIds.includes(d.id) && !ids.includes(d.id));
 
-  // De-duplicate: merge requested + auto-included sub-decks
-  const allDeckMap = new Map([...requestedDecks, ...autoSubDecks].map(d => [d.id, d]));
+  // De-duplicate
+  const allDeckMap = new Map([...requestedDecks, ...autoDecks].map(d => [d.id, d]));
   const allDecks = Array.from(allDeckMap.values());
 
   // Fetch all cards
@@ -142,71 +166,50 @@ router.post("/export-apkg", async (req, res): Promise<void> => {
     return;
   }
 
-  // Decide root label
-  // If exporting one parent → use its name; multiple → use exportName or generic
-  const rootParents = allDecks.filter(d => !d.parentId);
+  // Determine root label and root decks
+  // A "root" for export purposes is any selected deck whose parent is NOT in the export set.
+  const allExportIds = new Set(allDecks.map(d => d.id));
+  const exportRoots = allDecks.filter(d => !d.parentId || !allExportIds.has(d.parentId));
+
   const rootLabel =
     exportName?.trim() ||
-    (rootParents.length === 1 ? rootParents[0].name : `${rootParents.length} Decks`);
+    (exportRoots.length === 1 ? exportRoots[0].name : `${exportRoots.length} Decks`);
 
   // ── Build the .apkg ──────────────────────────────────────────────────────
-  //
-  // Strategy:
-  //   1. Create AnkiExport with rootLabel — this becomes the top-level parent deck.
-  //   2. For each sub-deck, manually add a deck entry to the SQLite col.decks JSON
-  //      using "ParentName::SubDeckName" notation — Anki reads this to build hierarchy.
-  //   3. Insert every card directly via SQL with the correct did (deck id).
-  //
-  // This produces a single .apkg that Anki imports as a proper nested deck tree.
-  // ─────────────────────────────────────────────────────────────────────────
-
   const apkg = AnkiExport(rootLabel);
-  const sqlDb = apkg.db; // sql.js Database instance
+  const sqlDb = apkg.db;
   const parentDeckId: number = apkg.topDeckId;
   const modelId: number = apkg.topModelId;
 
-  // Read the parent deck template from the current col.decks
   const colDecksRaw = sqlDb.exec("SELECT decks FROM col WHERE id=1");
   const colDecks = JSON.parse(colDecksRaw[0].values[0][0] as string);
   const templateDeck = colDecks[String(parentDeckId)];
 
-  // Build a map: our DB deck.id → Anki deck id + name
-  // Root decks (parentId=null) that are in the selection get mapped to either
-  // the single rootLabel deck (if only one parent) or get their own entries.
   const ankiDeckIdMap = new Map<number, { ankiId: number; ankiName: string }>();
-
-  // Assign Anki IDs — start from parentDeckId+1 to avoid collision
   let idCounter = parentDeckId + 1;
 
-  // First pass: root (parent) decks
-  for (const deck of allDecks.filter(d => !d.parentId)) {
-    if (rootParents.length === 1) {
-      // Only one root parent — it IS the top-level deck AnkiExport already created
-      ankiDeckIdMap.set(deck.id, { ankiId: parentDeckId, ankiName: rootLabel });
-    } else {
-      // Multiple root parents — add each as a sub-deck of rootLabel
-      const ankiName = `${rootLabel}::${deck.name}`;
+  if (exportRoots.length === 1) {
+    // Single root — it IS the top-level AnkiExport deck
+    const root = exportRoots[0];
+    ankiDeckIdMap.set(root.id, { ankiId: parentDeckId, ankiName: rootLabel });
+    // Recursively register all children
+    idCounter = registerDescendants(allDecksInDb, root.id, rootLabel, idCounter, ankiDeckIdMap, sqlDb, templateDeck);
+  } else {
+    // Multiple roots — each becomes a child of the rootLabel deck
+    for (const root of exportRoots) {
+      const ankiName = `${rootLabel}::${root.name}`;
       const ankiId = idCounter++;
       addDeckEntry(sqlDb, ankiId, ankiName, templateDeck);
-      ankiDeckIdMap.set(deck.id, { ankiId, ankiName });
+      ankiDeckIdMap.set(root.id, { ankiId, ankiName });
+      idCounter = registerDescendants(allDecksInDb, root.id, ankiName, idCounter, ankiDeckIdMap, sqlDb, templateDeck);
     }
   }
 
-  // Second pass: sub-decks
-  for (const deck of allDecks.filter(d => d.parentId)) {
-    const parentEntry = ankiDeckIdMap.get(deck.parentId!);
-    const parentAnkiName = parentEntry?.ankiName ?? rootLabel;
-    const ankiName = `${parentAnkiName}::${deck.name}`;
-    const ankiId = idCounter++;
-    addDeckEntry(sqlDb, ankiId, ankiName, templateDeck);
-    ankiDeckIdMap.set(deck.id, { ankiId, ankiName });
-  }
-
-  // Insert all cards with correct deck IDs
+  // Insert all cards
   let offset = 0;
   for (const card of allCards) {
     const entry = ankiDeckIdMap.get(card.deckId);
-    if (!entry) continue; // deck not in export set (shouldn't happen)
+    if (!entry) continue;
 
     const baseTags = card.tags ? card.tags.split(/[\s,]+/).map(t => t.trim()).filter(Boolean) : [];
 
@@ -218,7 +221,7 @@ router.post("/export-apkg", async (req, res): Promise<void> => {
       modelId,
       idOffset: offset,
     });
-    offset += 10; // ensure unique IDs within same millisecond
+    offset += 10;
   }
 
   const zipBuffer: Buffer = await apkg.save();

@@ -26,6 +26,33 @@ interface DeckFormSheetProps {
   onDone?: () => void;
 }
 
+function buildParentOptions(allDecks: DeckWithParent[], excludeId?: number): { id: number; label: string; depth: number }[] {
+  const rootDecks = allDecks.filter(d => !d.parentId && d.id !== excludeId);
+  const byParent = new Map<number, DeckWithParent[]>();
+  allDecks.filter(d => d.parentId).forEach(d => {
+    const pid = d.parentId!;
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid)!.push(d);
+  });
+
+  const result: { id: number; label: string; depth: number }[] = [];
+
+  function walk(deck: DeckWithParent, label: string, depth: number) {
+    if (deck.id === excludeId) return;
+    result.push({ id: deck.id, label, depth });
+    const children = byParent.get(deck.id) ?? [];
+    for (const child of children.sort((a, b) => a.name.localeCompare(b.name))) {
+      walk(child, `${label} › ${child.name}`, depth + 1);
+    }
+  }
+
+  for (const d of rootDecks.sort((a, b) => a.name.localeCompare(b.name))) {
+    walk(d, d.name, 0);
+  }
+
+  return result;
+}
+
 export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormSheetProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -38,19 +65,11 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
   const [parentId, setParentId] = useState<string>("none");
   const [isSaving, setIsSaving] = useState(false);
 
-  // Sub-deck slots (for new-topic mode: optionally create sub-decks right away)
   const [subSlots, setSubSlots] = useState<{ id: string; name: string }[]>([]);
 
-  // Topic decks = root decks that are not the deck being edited
-  const topicDecks = ((allDecks as DeckWithParent[]) ?? []).filter(d => {
-    if (!d.parentId) {
-      if (mode.type === "edit" && d.id === mode.deck.id) return false;
-      return true;
-    }
-    return false;
-  });
+  const excludeId = mode.type === "edit" ? mode.deck.id : undefined;
+  const parentOptions = buildParentOptions((allDecks as DeckWithParent[]) ?? [], excludeId);
 
-  // Reset form when mode or open changes
   useEffect(() => {
     if (!open) return;
     if (mode.type === "new-topic") {
@@ -92,7 +111,6 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
         );
         toast({ title: "Deck updated." });
       } else {
-        // Create the main deck / sub-deck
         const created = await new Promise<DeckWithParent>((resolve, reject) =>
           createDeck.mutate(
             { data: { name: name.trim(), description: description.trim() || null, parentId: resolvedParentId } },
@@ -100,7 +118,6 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
           )
         );
 
-        // If we're creating a topic and have sub-deck slots, create them too
         if (mode.type === "new-topic" && subSlots.length > 0) {
           const validSlots = subSlots.filter(s => s.name.trim());
           await Promise.all(
@@ -141,10 +158,12 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
 
   const description_ =
     mode.type === "new-topic" ? "Create a topic to organise related decks under one folder." :
-    mode.type === "new-subdeck" ? "Create a deck inside an existing main topic." :
-    "Update this deck's name, description, or topic assignment.";
+    mode.type === "new-subdeck" ? "Create a deck inside an existing parent deck." :
+    "Update this deck's name, description, or parent assignment.";
 
   const Icon = mode.type === "new-topic" ? FolderOpen : mode.type === "new-subdeck" ? FileText : Layers;
+
+  const selectedParentOpt = parentOptions.find(o => o.id.toString() === parentId);
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -189,31 +208,44 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
             />
           </div>
 
-          {/* Parent topic selector — shown for subdeck or edit mode */}
+          {/* Parent deck selector — shown for subdeck or edit mode */}
           {(mode.type === "new-subdeck" || mode.type === "edit") && (
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1.5">
                 <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                {mode.type === "edit" ? "Main Topic" : "Main Topic"}{" "}
+                Parent Deck{" "}
                 {mode.type === "new-subdeck" && <span className="text-destructive">*</span>}
                 {mode.type === "edit" && <span className="text-muted-foreground font-normal">(optional)</span>}
               </Label>
               <Select value={parentId} onValueChange={setParentId} disabled={isSaving}>
                 <SelectTrigger>
-                  <SelectValue placeholder={mode.type === "new-subdeck" ? "Select a main topic…" : "No parent — standalone"} />
+                  <SelectValue placeholder={mode.type === "new-subdeck" ? "Select a parent deck…" : "No parent — standalone"} />
                 </SelectTrigger>
                 <SelectContent>
                   {mode.type === "edit" && <SelectItem value="none">No parent — standalone deck</SelectItem>}
-                  {topicDecks.map(d => (
-                    <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
+                  {parentOptions.map(opt => (
+                    <SelectItem key={opt.id} value={opt.id.toString()}>
+                      <span style={{ paddingLeft: `${opt.depth * 12}px` }} className="inline-flex items-center gap-1">
+                        {opt.depth > 0 && <span className="text-muted-foreground text-xs">{"›".repeat(opt.depth)}</span>}
+                        {opt.label.split(" › ").pop()}
+                      </span>
+                      {opt.depth > 0 && (
+                        <span className="text-xs text-muted-foreground ml-1.5">({opt.label})</span>
+                      )}
+                    </SelectItem>
                   ))}
-                  {topicDecks.length === 0 && mode.type === "new-subdeck" && (
+                  {parentOptions.length === 0 && mode.type === "new-subdeck" && (
                     <div className="px-2 py-3 text-sm text-muted-foreground text-center">
                       No topics yet. Create a main topic first.
                     </div>
                   )}
                 </SelectContent>
               </Select>
+              {selectedParentOpt && selectedParentOpt.depth >= 1 && (
+                <p className="text-xs text-muted-foreground">
+                  This will create a sub-sub-deck inside <span className="font-medium">{selectedParentOpt.label}</span>.
+                </p>
+              )}
             </div>
           )}
 
@@ -289,7 +321,7 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
                   </Badge>
                 )}
               </div>
-              {subSlots.filter(s => s.name.trim()).map((s, i) => (
+              {subSlots.filter(s => s.name.trim()).map((s) => (
                 <div key={s.id} className="flex items-center gap-2 ml-4 border-l-2 border-primary/20 pl-3">
                   <FileText className="h-3.5 w-3.5 text-blue-500 shrink-0" />
                   <span className="text-xs text-muted-foreground">{name.trim()}::{s.name.trim()}</span>
@@ -298,7 +330,7 @@ export function DeckFormSheet({ open, onOpenChange, mode, onDone }: DeckFormShee
             </div>
           )}
 
-          <Button className="w-full" onClick={handleSave} disabled={!name.trim() || isSaving || (mode.type === "new-subdeck" && parentId === "none" && topicDecks.length > 0)}>
+          <Button className="w-full" onClick={handleSave} disabled={!name.trim() || isSaving || (mode.type === "new-subdeck" && parentId === "none" && parentOptions.length > 0)}>
             {isSaving
               ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Saving…</>
               : mode.type === "edit" ? "Save Changes"

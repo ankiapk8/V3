@@ -41,6 +41,32 @@ interface GenerateSheetProps {
   defaultParentId?: number | null;
 }
 
+function buildParentOptions(allDecks: DeckWithParent[]): { id: number; label: string; depth: number }[] {
+  const rootDecks = allDecks.filter(d => !d.parentId);
+  const byParent = new Map<number, DeckWithParent[]>();
+  allDecks.filter(d => d.parentId).forEach(d => {
+    const pid = d.parentId!;
+    if (!byParent.has(pid)) byParent.set(pid, []);
+    byParent.get(pid)!.push(d);
+  });
+
+  const result: { id: number; label: string; depth: number }[] = [];
+
+  function walk(deck: DeckWithParent, label: string, depth: number) {
+    result.push({ id: deck.id, label, depth });
+    const children = byParent.get(deck.id) ?? [];
+    for (const child of children.sort((a, b) => a.name.localeCompare(b.name))) {
+      walk(child, `${label} › ${child.name}`, depth + 1);
+    }
+  }
+
+  for (const d of rootDecks.sort((a, b) => a.name.localeCompare(b.name))) {
+    walk(d, d.name, 0);
+  }
+
+  return result;
+}
+
 export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: GenerateSheetProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -67,8 +93,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
   const hasManual = manualText.trim().length > 0 && manualDeckName.trim().length > 0;
   const canGenerate = !isExtracting && !isGeneratingAll && (readyFiles.length > 0 || hasManual);
 
-  // Only top-level decks can be parents (no nested sub-decks for simplicity)
-  const topicDecks = ((allDecks as DeckWithParent[]) ?? []).filter(d => !d.parentId);
+  const parentOptions = buildParentOptions((allDecks as DeckWithParent[]) ?? []);
 
   const updateFile = useCallback((id: string, patch: Partial<FileEntry>) => {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
@@ -223,6 +248,34 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
   const totalTargets = readyFiles.length + (hasManual ? 1 : 0);
 
+  const ParentSelector = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <div className="space-y-1.5">
+      <Label className="text-sm flex items-center gap-1.5">
+        <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+        Parent Deck <span className="text-muted-foreground font-normal">(optional)</span>
+      </Label>
+      <Select value={value} onValueChange={onChange}>
+        <SelectTrigger className="h-8 text-sm">
+          <SelectValue placeholder="No parent — standalone deck" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="none">No parent — standalone deck</SelectItem>
+          {parentOptions.map(opt => (
+            <SelectItem key={opt.id} value={opt.id.toString()}>
+              <span style={{ paddingLeft: `${opt.depth * 12}px` }} className="inline-flex items-center gap-1">
+                {opt.depth > 0 && <span className="text-muted-foreground">{"›".repeat(opt.depth)}</span>}
+                {opt.label.split(" › ").pop()}
+              </span>
+              {opt.depth > 0 && (
+                <span className="text-xs text-muted-foreground ml-1.5">({opt.label})</span>
+              )}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
@@ -243,25 +296,8 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
           {/* ── Generate tab ── */}
           <TabsContent value="generate" className="space-y-4 mt-0">
-            {/* Parent topic selector */}
-            {topicDecks.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-sm flex items-center gap-1.5">
-                  <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  Main Topic <span className="text-muted-foreground font-normal">(optional)</span>
-                </Label>
-                <Select value={parentId} onValueChange={setParentId}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="No parent — standalone deck" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No parent — standalone deck</SelectItem>
-                    {topicDecks.map(d => (
-                      <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {parentOptions.length > 0 && (
+              <ParentSelector value={parentId} onChange={setParentId} />
             )}
 
             {/* Drop zone */}
@@ -344,24 +380,8 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
           {/* ── Empty deck tab ── */}
           <TabsContent value="empty" className="space-y-4 mt-0">
-            {topicDecks.length > 0 && (
-              <div className="space-y-1.5">
-                <Label className="text-sm flex items-center gap-1.5">
-                  <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  Main Topic <span className="text-muted-foreground font-normal">(optional)</span>
-                </Label>
-                <Select value={emptyParentId} onValueChange={setEmptyParentId}>
-                  <SelectTrigger className="h-8 text-sm">
-                    <SelectValue placeholder="No parent — standalone deck" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">No parent — standalone deck</SelectItem>
-                    {topicDecks.map(d => (
-                      <SelectItem key={d.id} value={d.id.toString()}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {parentOptions.length > 0 && (
+              <ParentSelector value={emptyParentId} onChange={setEmptyParentId} />
             )}
             <div className="space-y-2">
               <Label htmlFor="emptyName">Deck Name</Label>
