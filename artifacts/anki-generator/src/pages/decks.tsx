@@ -20,7 +20,7 @@ import { DeckFormSheet, type DeckFormMode } from "@/components/deck-form-sheet";
 import {
   Trash2, Layers, Plus, Download, CheckSquare, X, Search,
   FileText, FolderOpen, ChevronDown, ChevronRight, Pencil,
-  Sparkles, BookOpen, MoreHorizontal,
+  Sparkles, BookOpen,
 } from "lucide-react";
 import { useState, useMemo } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -289,29 +289,24 @@ export default function Decks() {
                               {hasSubDecks ? totalTopicCards : deck.cardCount} card{(hasSubDecks ? totalTopicCards : deck.cardCount) !== 1 ? "s" : ""}
                             </span>
                             {!selectMode && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost" size="icon"
-                                    className="h-8 w-8 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                                    onClick={e => { e.preventDefault(); e.stopPropagation(); }}
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={e => { e.preventDefault(); e.stopPropagation(); openDeckForm({ type: "edit", deck }); }}>
-                                    <Pencil className="h-4 w-4" /> Edit
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem className="gap-2 cursor-pointer" onClick={e => { e.preventDefault(); e.stopPropagation(); openDeckForm({ type: "new-subdeck", parentId: deck.id }); }}>
-                                    <Plus className="h-4 w-4" /> Add sub-deck
-                                  </DropdownMenuItem>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={e => handleDelete(deck.id, e)}>
-                                    <Trash2 className="h-4 w-4" /> Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
+                              <div className="flex items-center gap-0.5">
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                                  title="Edit"
+                                  onClick={e => { e.preventDefault(); e.stopPropagation(); openDeckForm({ type: "edit", deck }); }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </Button>
+                                <Button
+                                  variant="ghost" size="icon"
+                                  className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                  title="Delete"
+                                  onClick={e => handleDelete(deck.id, e)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
                             )}
                           </div>
                         </div>
@@ -357,26 +352,24 @@ export default function Decks() {
                                         {sub.cardCount} card{sub.cardCount !== 1 ? "s" : ""}
                                       </span>
                                       {!selectMode && (
-                                        <DropdownMenu>
-                                          <DropdownMenuTrigger asChild>
-                                            <Button
-                                              variant="ghost" size="icon"
-                                              className="h-7 w-7 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                                              onClick={e => { e.preventDefault(); e.stopPropagation(); }}
-                                            >
-                                              <MoreHorizontal className="h-3.5 w-3.5" />
-                                            </Button>
-                                          </DropdownMenuTrigger>
-                                          <DropdownMenuContent align="end">
-                                            <DropdownMenuItem className="gap-2 cursor-pointer" onClick={e => { e.preventDefault(); e.stopPropagation(); openDeckForm({ type: "edit", deck: sub }); }}>
-                                              <Pencil className="h-4 w-4" /> Edit
-                                            </DropdownMenuItem>
-                                            <DropdownMenuSeparator />
-                                            <DropdownMenuItem className="gap-2 cursor-pointer text-destructive focus:text-destructive" onClick={e => handleDelete(sub.id, e)}>
-                                              <Trash2 className="h-4 w-4" /> Delete
-                                            </DropdownMenuItem>
-                                          </DropdownMenuContent>
-                                        </DropdownMenu>
+                                        <div className="flex items-center gap-0.5">
+                                          <Button
+                                            variant="ghost" size="icon"
+                                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                                            title="Edit"
+                                            onClick={e => { e.preventDefault(); e.stopPropagation(); openDeckForm({ type: "edit", deck: sub }); }}
+                                          >
+                                            <Pencil className="h-3 w-3" />
+                                          </Button>
+                                          <Button
+                                            variant="ghost" size="icon"
+                                            className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                            title="Delete"
+                                            onClick={e => handleDelete(sub.id, e)}
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
                                       )}
                                     </div>
                                   </div>
