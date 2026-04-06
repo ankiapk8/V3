@@ -5,7 +5,6 @@ import {
   useListDeckCards, 
   useUpdateCard, 
   useDeleteCard, 
-  useExportDeck, 
   getListDeckCardsQueryKey,
   getGetDeckQueryKey
 } from "@workspace/api-client-react";
@@ -30,24 +29,36 @@ export default function DeckDetail() {
 
   const updateCard = useUpdateCard();
   const deleteCard = useDeleteCard();
-  const { refetch: exportDeckData, isFetching: isExporting } = useExportDeck(deckId, { query: { enabled: false } });
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = async () => {
+    if (!deck) return;
+    setIsExporting(true);
     try {
-      const result = await exportDeckData();
-      if (result.data?.csv) {
-        const blob = new Blob([result.data.csv], { type: 'text/plain;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `${result.data.deckName || 'deck'}.txt`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast({ title: "Export complete", description: "Your deck has been downloaded as a txt file ready for Anki." });
+      const resp = await fetch("/api/export-apkg", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deckIds: [deckId], exportName: deck.name }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error ?? "Export failed.");
       }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement("a"), {
+        href: url,
+        download: `${deck.name.replace(/[^a-z0-9_\-]/gi, "_")}.apkg`,
+      });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Export complete", description: `Downloaded ${deck.name}.apkg — ready to import into Anki.` });
     } catch (err) {
-      toast({ title: "Export failed", variant: "destructive" });
+      toast({ title: "Export failed", description: err instanceof Error ? err.message : "Something went wrong.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
     }
   };
 
