@@ -39,6 +39,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - Routes: `/api/decks`, `/api/cards`, `/api/generate`, `/api/healthz`
 - AI generation uses `gpt-5.2` model via Replit AI Integrations
 - The AI client is loaded lazily so missing AI configuration returns a 503 from `/api/generate` instead of crashing the server
+- Route `/api/extract-pdf` accepts raw PDF uploads and extracts embedded text server-side for Safari/iPad browser fallback
 
 ## Database Schema
 

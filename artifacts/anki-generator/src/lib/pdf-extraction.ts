@@ -8,6 +8,7 @@ type ProgressCallback = (message: string) => void;
 
 const MIN_TEXT_LENGTH = 20;
 const MAX_OCR_DIMENSION = 2200;
+const SERVER_EXTRACT_URL = "/api/extract-pdf";
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
@@ -97,18 +98,68 @@ async function extractOcrText(buffer: ArrayBuffer, onProgress?: ProgressCallback
   return normalizeText(pageTexts.join("\n"));
 }
 
+async function extractServerText(buffer: ArrayBuffer, onProgress?: ProgressCallback): Promise<string> {
+  onProgress?.("Retrying on server…");
+  const response = await fetch(SERVER_EXTRACT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/pdf",
+    },
+    body: buffer.slice(0),
+  });
+
+  const data = await response.json().catch(() => null) as { text?: unknown; error?: unknown } | null;
+
+  if (!response.ok) {
+    const error = typeof data?.error === "string" ? data.error : "Server PDF extraction failed.";
+    throw new Error(error);
+  }
+
+  if (!data || typeof data.text !== "string" || data.text.trim().length <= MIN_TEXT_LENGTH) {
+    throw new Error("No readable text found in this PDF.");
+  }
+
+  return normalizeText(data.text);
+}
+
 export async function extractPdfText(buffer: ArrayBuffer, onProgress?: ProgressCallback): Promise<string> {
-  const embeddedText = await extractEmbeddedText(buffer, onProgress);
+  let localExtractionError: unknown = null;
+  let embeddedText = "";
+
+  try {
+    embeddedText = await extractEmbeddedText(buffer, onProgress);
+  } catch (error) {
+    localExtractionError = error;
+    try {
+      return await extractServerText(buffer, onProgress);
+    } catch (fallbackError) {
+      throw fallbackError instanceof Error
+        ? fallbackError
+        : error instanceof Error
+          ? error
+          : new Error("PDF extraction failed in this browser.");
+    }
+  }
 
   if (embeddedText.length > MIN_TEXT_LENGTH) {
     return embeddedText;
   }
 
   onProgress?.("Starting OCR…");
-  const ocrText = await extractOcrText(buffer, onProgress);
+  let ocrText = "";
+
+  try {
+    ocrText = await extractOcrText(buffer, onProgress);
+  } catch (error) {
+    localExtractionError = error;
+  }
 
   if (ocrText.length > MIN_TEXT_LENGTH) {
     return ocrText;
+  }
+
+  if (localExtractionError instanceof Error) {
+    throw localExtractionError;
   }
 
   throw new Error("No readable text found in this PDF.");
