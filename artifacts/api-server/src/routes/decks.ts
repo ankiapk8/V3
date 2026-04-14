@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql, isNull } from "drizzle-orm";
+import { eq, sql, isNull, inArray } from "drizzle-orm";
 import { db, decksTable, cardsTable } from "@workspace/db";
 import {
   CreateDeckBody,
@@ -171,10 +171,21 @@ router.get("/decks/:id/cards", async (req, res): Promise<void> => {
     return;
   }
 
+  const deckId = params.data.id;
+
+  // Find all sub-decks recursively so cards from nested decks are included
+  const allDecks = await db.select().from(decksTable);
+  function collectDescendantIds(parentId: number): number[] {
+    const children = allDecks.filter(d => d.parentId === parentId);
+    return [...children.map(d => d.id), ...children.flatMap(d => collectDescendantIds(d.id))];
+  }
+  const descendantIds = collectDescendantIds(deckId);
+  const allDeckIds = [deckId, ...descendantIds];
+
   const cards = await db
     .select()
     .from(cardsTable)
-    .where(eq(cardsTable.deckId, params.data.id))
+    .where(inArray(cardsTable.deckId, allDeckIds))
     .orderBy(cardsTable.createdAt);
 
   res.json(cards.map(c => ({ ...c, createdAt: c.createdAt.toISOString() })));

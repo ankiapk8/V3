@@ -14,9 +14,12 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card as CardUI, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Download, Trash2, Edit2, Check, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Download, Trash2, Edit2, Check, X, FolderOpen, FileText } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import type { Card } from "@workspace/api-client-react/src/generated/api.schemas";
+import type { Card, Deck } from "@workspace/api-client-react/src/generated/api.schemas";
+
+type DeckWithSubDecks = Deck & { subDecks?: Deck[] };
 
 export default function DeckDetail() {
   const { id } = useParams();
@@ -30,6 +33,10 @@ export default function DeckDetail() {
   const updateCard = useUpdateCard();
   const deleteCard = useDeleteCard();
   const [isExporting, setIsExporting] = useState(false);
+
+  const deckWithSubs = deck as DeckWithSubDecks | undefined;
+  const subDecks = deckWithSubs?.subDecks ?? [];
+  const hasSubDecks = subDecks.length > 0;
 
   const handleExport = async () => {
     if (!deck) return;
@@ -82,7 +89,14 @@ export default function DeckDetail() {
           <Link href="/decks" className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-2 transition-colors">
             <ArrowLeft className="mr-1 h-4 w-4" /> Back to Library
           </Link>
-          <h1 className="text-3xl font-serif font-bold text-primary tracking-tight">{deck.name}</h1>
+          <div className="flex items-center gap-3 flex-wrap">
+            <h1 className="text-3xl font-serif font-bold text-primary tracking-tight">{deck.name}</h1>
+            {hasSubDecks && (
+              <Badge variant="outline" className="text-sm">
+                {subDecks.length} sub-deck{subDecks.length !== 1 ? "s" : ""}
+              </Badge>
+            )}
+          </div>
           {deck.description && <p className="text-muted-foreground mt-1">{deck.description}</p>}
         </div>
         <Button onClick={handleExport} disabled={isExporting} className="gap-2 shrink-0">
@@ -91,9 +105,39 @@ export default function DeckDetail() {
         </Button>
       </div>
 
+      {hasSubDecks && (
+        <div className="space-y-3">
+          <h2 className="text-lg font-semibold tracking-tight border-b pb-2">Sub-Decks</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {subDecks.map(sub => (
+              <Link key={sub.id} href={`/decks/${sub.id}`}>
+                <CardUI className="hover:border-primary/40 hover:shadow-md transition-all cursor-pointer border-border/40">
+                  <CardContent className="flex items-center gap-3 py-3 px-4">
+                    <div className="h-8 w-8 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0">
+                      <FileText className="h-4 w-4 text-blue-500" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{sub.name}</p>
+                    </div>
+                    <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded shrink-0">
+                      {sub.cardCount} card{sub.cardCount !== 1 ? "s" : ""}
+                    </span>
+                  </CardContent>
+                </CardUI>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-6">
         <div className="flex items-center justify-between border-b pb-2">
-          <h2 className="text-xl font-medium tracking-tight">Cards ({cards?.length || 0})</h2>
+          <h2 className="text-xl font-medium tracking-tight">
+            Cards ({cards?.length || 0})
+            {hasSubDecks && cards && cards.length > 0 && (
+              <span className="text-sm font-normal text-muted-foreground ml-2">across all sub-decks</span>
+            )}
+          </h2>
         </div>
 
         {isLoadingCards ? (
@@ -109,7 +153,8 @@ export default function DeckDetail() {
             {cards?.map((card, idx) => (
               <EditableCard 
                 key={card.id} 
-                card={card} 
+                card={card}
+                subDeckName={hasSubDecks ? subDecks.find(s => s.id === card.deckId)?.name : undefined}
                 index={idx}
                 onUpdate={(id, data) => updateCard.mutate(
                   { id, data },
@@ -143,11 +188,13 @@ export default function DeckDetail() {
 function EditableCard({ 
   card, 
   index,
+  subDeckName,
   onUpdate, 
   onDelete 
 }: { 
-  card: Card; 
+  card: Card;
   index: number;
+  subDeckName?: string;
   onUpdate: (id: number, data: { front: string; back: string }) => void; 
   onDelete: (id: number) => void;
 }) {
@@ -207,6 +254,13 @@ function EditableCard({
       className="group hover-elevate transition-all duration-300 border-border/40 animate-in fade-in slide-in-from-bottom-2"
       style={{ animationDelay: `${index * 30}ms` }}
     >
+      {subDeckName && (
+        <div className="px-4 pt-3 pb-0">
+          <span className="text-[10px] font-semibold text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded-sm uppercase tracking-wider">
+            {subDeckName}
+          </span>
+        </div>
+      )}
       <CardContent className="p-0 flex flex-col sm:flex-row">
         <div className="flex-1 p-4 sm:p-5 border-b sm:border-b-0 sm:border-r border-border/40 relative">
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Front</div>
@@ -217,7 +271,6 @@ function EditableCard({
           <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{card.back}</p>
         </div>
         
-        {/* Actions - visible on hover */}
         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col gap-1 bg-background/80 backdrop-blur-sm rounded-md shadow-sm p-1">
           <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-primary" onClick={() => setIsEditing(true)}>
             <Edit2 className="h-4 w-4" />
