@@ -102,6 +102,8 @@ async function buildAll() {
       "electron",
       "pdfjs-dist",
       "pdfjs-dist/*",
+      "tesseract.js",
+      "tesseract.js/*",
     ],
     sourcemap: "linked",
     plugins: [
