@@ -22,7 +22,7 @@ import {
   FileText, FolderOpen, ChevronDown, ChevronRight, Pencil,
   Sparkles, BookOpen,
 } from "lucide-react";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
@@ -152,6 +152,23 @@ function DeckRow({
                     {format(new Date(deck.createdAt), "MMM d, yyyy")}
                     {depth === 0 && deck.description ? ` · ${deck.description}` : ""}
                   </p>
+                  {hasChildren && isCollapsed && !selectMode && (
+                    <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                      {children.slice(0, 4).map(child => (
+                        <span
+                          key={child.id}
+                          className="inline-flex items-center gap-1 text-[11px] bg-muted/60 text-muted-foreground border border-border/40 rounded px-1.5 py-0.5 font-medium"
+                        >
+                          <FileText className="h-2.5 w-2.5 shrink-0" />
+                          <span className="truncate max-w-[80px]">{child.name}</span>
+                          <span className="shrink-0 text-primary font-semibold">{child.cardCount}</span>
+                        </span>
+                      ))}
+                      {children.length > 4 && (
+                        <span className="text-[11px] text-muted-foreground">+{children.length - 4} more</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                   <span className={cardCountClass}>
@@ -242,6 +259,19 @@ export default function Decks() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (!decks || initializedRef.current) return;
+    const all = decks as DeckWithParent[];
+    const parentIds = all.filter(d => d.parentId).map(d => d.parentId!);
+    const parentSet = new Set(parentIds);
+    const toCollapse = all.filter(d => parentSet.has(d.id)).map(d => d.id);
+    if (toCollapse.length > 0) {
+      setCollapsedIds(new Set(toCollapse));
+      initializedRef.current = true;
+    }
+  }, [decks]);
 
   const totalCards = (decks as DeckWithParent[] | undefined)?.reduce((sum, d) => sum + d.cardCount, 0) ?? 0;
 
