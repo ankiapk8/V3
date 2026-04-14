@@ -12,12 +12,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { UploadCloud, X, CheckCircle2, AlertCircle, Loader2, FileText, Sparkles, FolderOpen } from "lucide-react";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { createWorker } from "tesseract.js";
+import { extractPdfText, isPdfFile, isTextFile } from "@/lib/pdf-extraction";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type FileStatus = "extracting" | "ready" | "error" | "generating" | "done";
 
@@ -99,42 +95,9 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
   }, []);
 
-  const extractPdfText = async (buffer: ArrayBuffer): Promise<string> => {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-    const pdf = await loadingTask.promise;
-    const texts: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      texts.push(content.items.map((item: any) => item.str ?? "").join(" "));
-    }
-    return texts.join("\n").replace(/\s+/g, " ").trim();
-  };
-
-  const ocrPdf = async (buffer: ArrayBuffer, id: string): Promise<string> => {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-    const pdf = await loadingTask.promise;
-    const total = pdf.numPages;
-    const worker = await createWorker("eng");
-    const texts: string[] = [];
-    for (let i = 1; i <= total; i++) {
-      updateFile(id, { progress: `OCR page ${i}/${total}…` });
-      const page = await pdf.getPage(i);
-      const vp = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement("canvas");
-      canvas.width = vp.width; canvas.height = vp.height;
-      await page.render({ canvasContext: canvas.getContext("2d")!, viewport: vp }).promise;
-      const blob = await new Promise<Blob>(res => canvas.toBlob(b => res(b!), "image/png"));
-      texts.push((await worker.recognize(blob)).data.text);
-    }
-    await worker.terminate();
-    return texts.join("\n").replace(/\s+/g, " ").trim();
-  };
-
   const processFile = useCallback(async (file: File) => {
-    const isTxt = file.type === "text/plain" || file.name.endsWith(".txt");
-    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isTxt = isTextFile(file);
+    const isPdf = isPdfFile(file);
     if (!isTxt && !isPdf) {
       toast({ title: "Unsupported file", description: `${file.name} is not .txt or .pdf`, variant: "destructive" });
       return;
@@ -147,19 +110,13 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
         const text = await file.text();
         updateFile(id, { status: "ready", text, progress: "" });
       } else {
-        updateFile(id, { progress: "Extracting text…" });
         const buffer = await file.arrayBuffer();
-        const extracted = await extractPdfText(buffer);
-        if (extracted.length > 20) {
-          updateFile(id, { status: "ready", text: extracted, progress: "" });
-        } else {
-          updateFile(id, { progress: "Starting OCR…" });
-          const ocr = await ocrPdf(buffer, id);
-          updateFile(id, ocr.length > 20 ? { status: "ready", text: ocr, progress: "" } : { status: "error", progress: "No text found" });
-        }
+        const extracted = await extractPdfText(buffer, (progress) => updateFile(id, { progress }));
+        updateFile(id, { status: "ready", text: extracted, progress: "" });
       }
-    } catch {
-      updateFile(id, { status: "error", progress: "Extraction failed" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Extraction failed";
+      updateFile(id, { status: "error", progress: message });
     }
   }, [updateFile, toast]);
 

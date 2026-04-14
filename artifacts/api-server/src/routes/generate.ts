@@ -1,9 +1,17 @@
 import { Router, type IRouter } from "express";
 import { db, decksTable, cardsTable } from "@workspace/db";
 import { GenerateCardsBody } from "@workspace/api-zod";
-import { openai } from "@workspace/integrations-openai-ai-server";
 
 const router: IRouter = Router();
+
+async function getOpenAIClient() {
+  if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || !process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
+    throw new Error("AI card generation is not configured yet.");
+  }
+
+  const { openai } = await import("@workspace/integrations-openai-ai-server");
+  return openai;
+}
 
 router.post("/generate", async (req, res): Promise<void> => {
   const parsed = GenerateCardsBody.safeParse(req.body);
@@ -35,14 +43,24 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
 
   const userPrompt = `Generate exactly ${maxCards} Anki flashcards from the following text. Return only a JSON array:\n\n${text.slice(0, 15000)}`;
 
-  const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
-    max_completion_tokens: 8192,
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userPrompt },
-    ],
-  });
+  let response;
+  try {
+    const openai = await getOpenAIClient();
+    response = await openai.chat.completions.create({
+      model: "gpt-5.2",
+      max_completion_tokens: 8192,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+    });
+  } catch (error) {
+    req.log.error({ err: error }, "AI card generation failed");
+    res.status(503).json({
+      error: error instanceof Error ? error.message : "AI card generation failed.",
+    });
+    return;
+  }
 
   const rawContent = response.choices[0]?.message?.content ?? "[]";
 

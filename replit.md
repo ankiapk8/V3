@@ -31,11 +31,13 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - React + Vite web app at `/`
 - Upload files (PDF, TXT) or paste text to generate Anki flashcards via AI
 - Browse and manage decks, edit cards inline, export to CSV for Anki import
+- PDF extraction is handled in `src/lib/pdf-extraction.ts` using PDF.js embedded text first, then OCR fallback for scanned PDFs
 
 ### API Server (`artifacts/api-server`)
 - Express 5 backend at `/api`
 - Routes: `/api/decks`, `/api/cards`, `/api/generate`, `/api/healthz`
 - AI generation uses `gpt-5.2` model via Replit AI Integrations
+- The AI client is loaded lazily so missing AI configuration returns a 503 from `/api/generate` instead of crashing the server
 
 ## Database Schema
 

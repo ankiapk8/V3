@@ -11,14 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Loader2, UploadCloud, X, CheckCircle2, AlertCircle, Sparkles, FolderOpen } from "lucide-react";
-import * as pdfjsLib from "pdfjs-dist";
-import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { createWorker } from "tesseract.js";
+import { extractPdfText, isPdfFile, isTextFile } from "@/lib/pdf-extraction";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 type DeckWithParent = Deck & { parentId?: number | null };
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 function buildParentOptions(allDecks: DeckWithParent[]): { id: number; label: string; depth: number }[] {
   const roots = allDecks.filter(d => !d.parentId);
@@ -81,46 +77,9 @@ export default function Home() {
     setFiles(prev => prev.map(f => f.id === id ? { ...f, ...patch } : f));
   }, []);
 
-  const extractPdfText = async (buffer: ArrayBuffer): Promise<string> => {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-    const pdf = await loadingTask.promise;
-    const pageTexts: string[] = [];
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pageText = content.items.map((item: any) => (typeof item.str === "string" ? item.str : "")).join(" ");
-      pageTexts.push(pageText);
-    }
-    return pageTexts.join("\n").replace(/\s+/g, " ").trim();
-  };
-
-  const ocrPdfPages = async (buffer: ArrayBuffer, id: string): Promise<string> => {
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(buffer) });
-    const pdf = await loadingTask.promise;
-    const totalPages = pdf.numPages;
-    const worker = await createWorker("eng");
-    const pageTexts: string[] = [];
-    for (let i = 1; i <= totalPages; i++) {
-      updateFile(id, { progress: `OCR page ${i}/${totalPages}…` });
-      const page = await pdf.getPage(i);
-      const viewport = page.getViewport({ scale: 2.0 });
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d")!;
-      await page.render({ canvasContext: ctx, viewport }).promise;
-      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
-      const { data } = await worker.recognize(blob);
-      pageTexts.push(data.text);
-    }
-    await worker.terminate();
-    return pageTexts.join("\n").replace(/\s+/g, " ").trim();
-  };
-
   const processFile = useCallback(async (file: File) => {
-    const isTxt = file.type === "text/plain" || file.name.endsWith(".txt");
-    const isPdf = file.type === "application/pdf" || file.name.endsWith(".pdf");
+    const isTxt = isTextFile(file);
+    const isPdf = isPdfFile(file);
     if (!isTxt && !isPdf) {
       toast({ title: "Unsupported file", description: `${file.name} is not a .txt or .pdf file.`, variant: "destructive" });
       return;
@@ -134,23 +93,13 @@ export default function Home() {
         const text = await file.text();
         updateFile(id, { status: "ready", text, progress: "" });
       } else {
-        updateFile(id, { progress: "Extracting text…" });
         const buffer = await file.arrayBuffer();
-        const extracted = await extractPdfText(buffer);
-        if (extracted && extracted.length > 20) {
-          updateFile(id, { status: "ready", text: extracted, progress: "" });
-        } else {
-          updateFile(id, { progress: "Starting OCR…" });
-          const ocrText = await ocrPdfPages(buffer, id);
-          if (ocrText && ocrText.length > 20) {
-            updateFile(id, { status: "ready", text: ocrText, progress: "" });
-          } else {
-            updateFile(id, { status: "error", progress: "No text found" });
-          }
-        }
+        const extracted = await extractPdfText(buffer, (progress) => updateFile(id, { progress }));
+        updateFile(id, { status: "ready", text: extracted, progress: "" });
       }
-    } catch {
-      updateFile(id, { status: "error", progress: "Extraction failed" });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Extraction failed";
+      updateFile(id, { status: "error", progress: message });
     }
   }, [updateFile, toast]);
 
