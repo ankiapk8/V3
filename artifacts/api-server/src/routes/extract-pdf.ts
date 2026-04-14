@@ -1,4 +1,5 @@
 import express, { Router, type IRouter } from "express";
+import multer from "multer";
 import { createCanvas } from "canvas";
 import { createWorker } from "tesseract.js";
 import type { PDFDocumentProxy } from "pdfjs-dist";
@@ -7,13 +8,28 @@ const router: IRouter = Router();
 const MIN_TEXT_LENGTH = 20;
 const OCR_SCALE = 2;
 const MAX_OCR_DIMENSION = 2200;
+const MAX_PDF_SIZE = 50 * 1024 * 1024; // 50 MB
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_PDF_SIZE },
+  fileFilter: (_req, file, cb) => {
+    if (
+      file.mimetype === "application/pdf" ||
+      file.originalname.toLowerCase().endsWith(".pdf")
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PDF files are accepted."));
+    }
+  },
+});
 
 function normalizeText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
 function pdfDocOptions(buffer: Buffer) {
-  // Copy the buffer so pdfjs-dist cannot detach the original ArrayBuffer.
   const copy = Buffer.from(buffer);
   return {
     data: new Uint8Array(copy.buffer, copy.byteOffset, copy.byteLength),
@@ -90,42 +106,62 @@ async function extractOcrText(buffer: Buffer): Promise<string> {
   return normalizeText(pageTexts.join("\n"));
 }
 
+async function processPdfBuffer(buffer: Buffer, res: express.Response, log: { info: (msg: string) => void; error: (obj: object, msg: string) => void }): Promise<void> {
+  try {
+    const { text: embeddedText } = await extractEmbeddedPdfText(buffer);
+
+    if (embeddedText.length > MIN_TEXT_LENGTH) {
+      res.json({ text: embeddedText, length: embeddedText.length, method: "embedded" });
+      return;
+    }
+
+    log.info("No embedded text found, running server-side OCR…");
+    const ocrText = await extractOcrText(buffer);
+
+    if (ocrText.length <= MIN_TEXT_LENGTH) {
+      res.status(422).json({
+        error: "No readable text could be extracted from this PDF, even with OCR.",
+      });
+      return;
+    }
+
+    res.json({ text: ocrText, length: ocrText.length, method: "ocr" });
+  } catch (error) {
+    log.error({ err: error }, "Server-side PDF extraction failed");
+    res.status(422).json({
+      error: error instanceof Error ? error.message : "Could not extract text from this PDF.",
+    });
+  }
+}
+
 router.post(
   "/extract-pdf",
+  (req, res, next) => {
+    const ct = req.headers["content-type"] ?? "";
+    if (ct.includes("multipart/form-data")) {
+      upload.single("file")(req, res, next);
+    } else {
+      next();
+    }
+  },
   express.raw({ type: ["application/pdf", "application/octet-stream"], limit: "50mb" }),
   async (req, res): Promise<void> => {
-    const body = req.body;
+    const log = (req as express.Request & { log: { info: (m: string) => void; error: (o: object, m: string) => void } }).log;
 
-    if (!Buffer.isBuffer(body) || body.byteLength === 0) {
+    let buffer: Buffer | null = null;
+
+    if ((req as express.Request & { file?: Express.Multer.File }).file) {
+      buffer = (req as express.Request & { file?: Express.Multer.File }).file!.buffer;
+    } else if (Buffer.isBuffer(req.body) && req.body.byteLength > 0) {
+      buffer = req.body;
+    }
+
+    if (!buffer) {
       res.status(400).json({ error: "Upload a PDF file to extract text." });
       return;
     }
 
-    try {
-      const { text: embeddedText } = await extractEmbeddedPdfText(body);
-
-      if (embeddedText.length > MIN_TEXT_LENGTH) {
-        res.json({ text: embeddedText, length: embeddedText.length, method: "embedded" });
-        return;
-      }
-
-      req.log.info("No embedded text found, running server-side OCR…");
-      const ocrText = await extractOcrText(body);
-
-      if (ocrText.length <= MIN_TEXT_LENGTH) {
-        res.status(422).json({
-          error: "No readable text could be extracted from this PDF, even with OCR.",
-        });
-        return;
-      }
-
-      res.json({ text: ocrText, length: ocrText.length, method: "ocr" });
-    } catch (error) {
-      req.log.error({ err: error }, "Server-side PDF extraction failed");
-      res.status(422).json({
-        error: error instanceof Error ? error.message : "Could not extract text from this PDF.",
-      });
-    }
+    await processPdfBuffer(buffer, res, log);
   },
 );
 
