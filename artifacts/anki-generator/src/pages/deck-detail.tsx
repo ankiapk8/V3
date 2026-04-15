@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, Link } from "wouter";
 import { 
   useGetDeck, 
@@ -22,6 +22,7 @@ import {
   RotateCcw, GraduationCap, Eye
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { saveSession } from "@/lib/study-stats";
 import type { Card, Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 type DeckWithSubDecks = Deck & { subDecks?: Deck[] };
@@ -35,7 +36,7 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
-function StudyMode({ cards, onExit }: { cards: Card[]; onExit: () => void }) {
+function StudyMode({ cards, deckId, deckName, onExit }: { cards: Card[]; deckId: number; deckName: string; onExit: () => void }) {
   const [shuffled, setShuffled] = useState(false);
   const [deck, setDeck] = useState<Card[]>(cards);
   const [index, setIndex] = useState(0);
@@ -44,10 +45,25 @@ function StudyMode({ cards, onExit }: { cards: Card[]; onExit: () => void }) {
   const [unknown, setUnknown] = useState<Set<number>>(new Set());
   const [done, setDone] = useState(false);
   const [flipping, setFlipping] = useState(false);
+  const savedRef = useRef(false);
 
   const current = deck[index];
   const total = deck.length;
   const progress = total > 0 ? Math.round(((known.size + unknown.size) / total) * 100) : 0;
+
+  useEffect(() => {
+    if (done && !savedRef.current && (known.size + unknown.size) > 0) {
+      savedRef.current = true;
+      saveSession({
+        deckId,
+        deckName,
+        total: known.size + unknown.size,
+        known: known.size,
+        unknown: unknown.size,
+        completedAt: new Date().toISOString(),
+      });
+    }
+  }, [done, known.size, unknown.size, deckId, deckName]);
 
   const handleShuffle = useCallback(() => {
     const next = shuffled ? cards : shuffleArray(cards);
@@ -346,7 +362,7 @@ export default function DeckDetail() {
             <GraduationCap className="h-3.5 w-3.5" /> Study Mode
           </Badge>
         </div>
-        <StudyMode cards={cardList} onExit={() => setStudyMode(false)} />
+        <StudyMode cards={cardList} deckId={deck.id} deckName={deck.name} onExit={() => setStudyMode(false)} />
       </div>
     );
   }
