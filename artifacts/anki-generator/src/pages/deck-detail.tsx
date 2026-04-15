@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, Link } from "wouter";
 import { 
   useGetDeck, 
@@ -15,11 +15,263 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card as CardUI, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Download, Trash2, Edit2, Check, X, FolderOpen, FileText } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { 
+  ArrowLeft, Download, Trash2, Edit2, Check, X, 
+  FileText, BookOpen, Shuffle, ChevronLeft, ChevronRight,
+  RotateCcw, GraduationCap, Eye
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { Card, Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 type DeckWithSubDecks = Deck & { subDecks?: Deck[] };
+
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function StudyMode({ cards, onExit }: { cards: Card[]; onExit: () => void }) {
+  const [shuffled, setShuffled] = useState(false);
+  const [deck, setDeck] = useState<Card[]>(cards);
+  const [index, setIndex] = useState(0);
+  const [revealed, setRevealed] = useState(false);
+  const [known, setKnown] = useState<Set<number>>(new Set());
+  const [unknown, setUnknown] = useState<Set<number>>(new Set());
+  const [done, setDone] = useState(false);
+  const [flipping, setFlipping] = useState(false);
+
+  const current = deck[index];
+  const total = deck.length;
+  const progress = total > 0 ? Math.round(((known.size + unknown.size) / total) * 100) : 0;
+
+  const handleShuffle = useCallback(() => {
+    const next = shuffled ? cards : shuffleArray(cards);
+    setShuffled(!shuffled);
+    setDeck(next);
+    setIndex(0);
+    setRevealed(false);
+    setKnown(new Set());
+    setUnknown(new Set());
+    setDone(false);
+  }, [shuffled, cards]);
+
+  const handleRestart = useCallback(() => {
+    setDeck(shuffled ? shuffleArray(cards) : cards);
+    setIndex(0);
+    setRevealed(false);
+    setKnown(new Set());
+    setUnknown(new Set());
+    setDone(false);
+  }, [shuffled, cards]);
+
+  const transition = useCallback((fn: () => void) => {
+    setFlipping(true);
+    setTimeout(() => { fn(); setFlipping(false); }, 150);
+  }, []);
+
+  const goNext = useCallback(() => {
+    if (index + 1 >= total) { setDone(true); return; }
+    transition(() => { setIndex(i => i + 1); setRevealed(false); });
+  }, [index, total, transition]);
+
+  const goPrev = useCallback(() => {
+    if (index === 0) return;
+    transition(() => { setIndex(i => i - 1); setRevealed(false); });
+  }, [index, transition]);
+
+  const markKnown = useCallback(() => {
+    setKnown(prev => new Set([...prev, current.id]));
+    setUnknown(prev => { const s = new Set(prev); s.delete(current.id); return s; });
+    goNext();
+  }, [current?.id, goNext]);
+
+  const markUnknown = useCallback(() => {
+    setUnknown(prev => new Set([...prev, current.id]));
+    setKnown(prev => { const s = new Set(prev); s.delete(current.id); return s; });
+    goNext();
+  }, [current?.id, goNext]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === " " || e.key === "Enter") { e.preventDefault(); if (!revealed) setRevealed(true); else markKnown(); }
+      if (e.key === "ArrowRight") { e.preventDefault(); goNext(); }
+      if (e.key === "ArrowLeft") { e.preventDefault(); goPrev(); }
+      if (e.key === "1" && revealed) markKnown();
+      if (e.key === "2" && revealed) markUnknown();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [revealed, goNext, goPrev, markKnown, markUnknown]);
+
+  if (done) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-8 animate-in fade-in duration-500">
+        <div className="text-center space-y-3">
+          <div className="text-5xl mb-4">🎉</div>
+          <h2 className="text-2xl font-serif font-bold text-primary">Study session complete!</h2>
+          <p className="text-muted-foreground">You went through all {total} cards.</p>
+        </div>
+        <div className="flex gap-8 text-center">
+          <div className="space-y-1">
+            <p className="text-3xl font-bold text-green-600">{known.size}</p>
+            <p className="text-sm text-muted-foreground">Got it</p>
+          </div>
+          <div className="w-px bg-border" />
+          <div className="space-y-1">
+            <p className="text-3xl font-bold text-red-500">{unknown.size}</p>
+            <p className="text-sm text-muted-foreground">Still learning</p>
+          </div>
+        </div>
+        {total > 0 && (
+          <div className="w-full max-w-xs">
+            <Progress value={Math.round((known.size / total) * 100)} className="h-2" />
+            <p className="text-xs text-center text-muted-foreground mt-1">{Math.round((known.size / total) * 100)}% known</p>
+          </div>
+        )}
+        <div className="flex gap-3 flex-wrap justify-center">
+          <Button variant="outline" onClick={handleRestart} className="gap-2">
+            <RotateCcw className="h-4 w-4" /> Study again
+          </Button>
+          {unknown.size > 0 && (
+            <Button onClick={() => {
+              const struggling = deck.filter(c => unknown.has(c.id));
+              setDeck(struggling);
+              setIndex(0);
+              setRevealed(false);
+              setKnown(new Set());
+              setUnknown(new Set());
+              setDone(false);
+            }} className="gap-2">
+              <RotateCcw className="h-4 w-4" /> Review {unknown.size} missed
+            </Button>
+          )}
+          <Button variant="ghost" onClick={onExit} className="gap-2">
+            <ArrowLeft className="h-4 w-4" /> Back to deck
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6 animate-in fade-in duration-300">
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" size="sm" onClick={onExit} className="gap-1.5 text-muted-foreground">
+          <ArrowLeft className="h-4 w-4" /> Exit study
+        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant={shuffled ? "secondary" : "ghost"}
+            size="sm"
+            onClick={handleShuffle}
+            className="gap-1.5 h-8 text-xs"
+          >
+            <Shuffle className="h-3.5 w-3.5" />
+            {shuffled ? "Shuffled" : "Shuffle"}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleRestart} className="gap-1.5 h-8 text-xs text-muted-foreground">
+            <RotateCcw className="h-3.5 w-3.5" /> Restart
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <div className="flex justify-between text-xs text-muted-foreground">
+          <span>Card {index + 1} of {total}</span>
+          <span className="flex gap-3">
+            {known.size > 0 && <span className="text-green-600 font-medium">✓ {known.size} known</span>}
+            {unknown.size > 0 && <span className="text-red-500 font-medium">✗ {unknown.size} learning</span>}
+          </span>
+        </div>
+        <Progress value={progress} className="h-1.5" />
+      </div>
+
+      <div
+        className={`transition-all duration-150 ${flipping ? "opacity-0 scale-95" : "opacity-100 scale-100"}`}
+      >
+        <CardUI className="min-h-[280px] sm:min-h-[320px] border-border/50 shadow-lg overflow-hidden">
+          <CardContent className="p-0 flex flex-col h-full min-h-[280px] sm:min-h-[320px]">
+            <div className="flex-1 flex flex-col p-6 sm:p-8">
+              <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
+                <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">Q</span>
+                Front
+              </div>
+              <p className="text-lg sm:text-xl font-medium text-foreground leading-relaxed flex-1">
+                {current?.front}
+              </p>
+            </div>
+
+            {revealed ? (
+              <div className="border-t border-dashed border-border/60 bg-muted/30 flex flex-col p-6 sm:p-8 animate-in slide-in-from-bottom-2 duration-200">
+                <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span className="h-5 w-5 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center text-[9px] font-bold">A</span>
+                  Back
+                </div>
+                <p className="text-base sm:text-lg text-foreground leading-relaxed">
+                  {current?.back}
+                </p>
+              </div>
+            ) : (
+              <div className="border-t border-dashed border-border/30 p-4 sm:p-6 flex justify-center">
+                <Button onClick={() => setRevealed(true)} className="gap-2" size="lg">
+                  <Eye className="h-4 w-4" /> Reveal Answer
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </CardUI>
+      </div>
+
+      {revealed && (
+        <div className="flex flex-col sm:flex-row gap-3 animate-in fade-in duration-200">
+          <Button
+            variant="outline"
+            className="flex-1 gap-2 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300 h-12"
+            onClick={markUnknown}
+          >
+            <X className="h-4 w-4" /> Still Learning
+            <span className="ml-auto text-xs opacity-50">2</span>
+          </Button>
+          <Button
+            className="flex-1 gap-2 bg-green-600 hover:bg-green-700 text-white h-12"
+            onClick={markKnown}
+          >
+            <Check className="h-4 w-4" /> Got It
+            <span className="ml-auto text-xs opacity-70">1</span>
+          </Button>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={goPrev}
+          disabled={index === 0}
+          className="gap-1 text-muted-foreground"
+        >
+          <ChevronLeft className="h-4 w-4" /> Previous
+        </Button>
+        {!revealed && (
+          <span className="text-xs text-muted-foreground">Press Space to reveal</span>
+        )}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={goNext}
+          className="gap-1 text-muted-foreground"
+        >
+          Skip <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function DeckDetail() {
   const { id } = useParams();
@@ -33,6 +285,7 @@ export default function DeckDetail() {
   const updateCard = useUpdateCard();
   const deleteCard = useDeleteCard();
   const [isExporting, setIsExporting] = useState(false);
+  const [studyMode, setStudyMode] = useState(false);
 
   const deckWithSubs = deck as DeckWithSubDecks | undefined;
   const subDecks = deckWithSubs?.subDecks ?? [];
@@ -82,6 +335,22 @@ export default function DeckDetail() {
     return <div className="text-center py-20">Deck not found</div>;
   }
 
+  const cardList = cards ?? [];
+
+  if (studyMode && cardList.length > 0) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-300 pb-20">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h1 className="text-2xl font-serif font-bold text-primary tracking-tight">{deck.name}</h1>
+          <Badge className="gap-1.5 bg-primary/10 text-primary border-primary/20 hover:bg-primary/10">
+            <GraduationCap className="h-3.5 w-3.5" /> Study Mode
+          </Badge>
+        </div>
+        <StudyMode cards={cardList} onExit={() => setStudyMode(false)} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500 pb-20">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -99,10 +368,22 @@ export default function DeckDetail() {
           </div>
           {deck.description && <p className="text-muted-foreground mt-1">{deck.description}</p>}
         </div>
-        <Button onClick={handleExport} disabled={isExporting} className="gap-2 shrink-0">
-          <Download className="h-4 w-4" />
-          Export for Anki
-        </Button>
+        <div className="flex gap-2 shrink-0 flex-wrap">
+          {cardList.length > 0 && (
+            <Button 
+              variant="outline" 
+              onClick={() => setStudyMode(true)} 
+              className="gap-2"
+            >
+              <BookOpen className="h-4 w-4" />
+              Study
+            </Button>
+          )}
+          <Button onClick={handleExport} disabled={isExporting} className="gap-2">
+            <Download className="h-4 w-4" />
+            Export for Anki
+          </Button>
+        </div>
       </div>
 
       {hasSubDecks && (
@@ -133,8 +414,8 @@ export default function DeckDetail() {
       <div className="space-y-6">
         <div className="flex items-center justify-between border-b pb-2">
           <h2 className="text-xl font-medium tracking-tight">
-            Cards ({cards?.length || 0})
-            {hasSubDecks && cards && cards.length > 0 && (
+            Cards ({cardList.length})
+            {hasSubDecks && cardList.length > 0 && (
               <span className="text-sm font-normal text-muted-foreground ml-2">across all sub-decks</span>
             )}
           </h2>
@@ -144,13 +425,13 @@ export default function DeckDetail() {
           <div className="space-y-4">
             {[1, 2, 3].map(i => <Skeleton key={i} className="h-32 w-full" />)}
           </div>
-        ) : cards?.length === 0 ? (
+        ) : cardList.length === 0 ? (
           <div className="text-center py-12 bg-card rounded-lg border border-dashed">
             <p className="text-muted-foreground">No cards in this deck yet.</p>
           </div>
         ) : (
           <div className="grid gap-4">
-            {cards?.map((card, idx) => (
+            {cardList.map((card, idx) => (
               <EditableCard 
                 key={card.id} 
                 card={card}
@@ -261,12 +542,12 @@ function EditableCard({
           </span>
         </div>
       )}
-      <CardContent className="p-0 flex flex-col sm:flex-row">
-        <div className="flex-1 p-4 sm:p-5 border-b sm:border-b-0 sm:border-r border-border/40 relative">
+      <CardContent className="p-0 flex flex-col sm:flex-row relative">
+        <div className="flex-1 p-4 sm:p-5 border-b sm:border-b-0 sm:border-r border-border/40">
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Front</div>
           <p className="font-medium text-foreground whitespace-pre-wrap leading-relaxed">{card.front}</p>
         </div>
-        <div className="flex-1 p-4 sm:p-5 relative">
+        <div className="flex-1 p-4 sm:p-5">
           <div className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Back</div>
           <p className="text-muted-foreground whitespace-pre-wrap leading-relaxed">{card.back}</p>
         </div>

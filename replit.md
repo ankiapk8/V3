@@ -30,16 +30,18 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 ### Anki Card Generator (`artifacts/anki-generator`)
 - React + Vite web app at `/`
 - Upload files (PDF, TXT) or paste text to generate Anki flashcards via AI
-- Browse and manage decks, edit cards inline, export to CSV for Anki import
-- PDF extraction in `src/lib/pdf-extraction.ts`: embedded text → server OCR (new) → client-side OCR (last resort fallback only when server is unreachable)
+- Browse and manage decks, edit cards inline, export `.apkg` for Anki import
+- **Study mode** on deck detail page: flip cards, reveal answer, mark "Got It"/"Still Learning", shuffle, progress bar, completion screen with missed-card review
+- PDF extraction in `src/lib/pdf-extraction.ts`: files >20MB skip client and go straight to server; smaller files try embedded text first, then server, then client OCR
+- Server upload uses `FormData` multipart (avoids Replit proxy limits on raw binary bodies)
 - Safari/iPad compatibility uses a `Promise.withResolvers` polyfill in `src/main.tsx` before loading the app and the legacy PDF.js build
 
 ### API Server (`artifacts/api-server`)
 - Express 5 backend at `/api`
-- Routes: `/api/decks`, `/api/cards`, `/api/generate`, `/api/healthz`
-- AI generation uses `gpt-5.2` model via Replit AI Integrations
+- Routes: `/api/decks`, `/api/cards`, `/api/generate`, `/api/extract-pdf`, `/api/export-apkg`, `/api/healthz`
+- AI generation uses `gpt-5.2` model via Replit AI Integrations (env vars: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
 - The AI client is loaded lazily so missing AI configuration returns a 503 from `/api/generate` instead of crashing the server
-- Route `/api/extract-pdf` accepts raw PDF uploads; first tries embedded text extraction via pdfjs-dist, then falls back to server-side OCR using `canvas` + `tesseract.js` (enables scanned/image-only PDFs to work on iPad)
+- Route `/api/extract-pdf` accepts both `multipart/form-data` (via multer, field name `file`) and raw `application/pdf` body; embedded text → server OCR fallback
 - System dependency `util-linux` (provides `libuuid.so.1`) is required by the `canvas` npm package; installed via Nix
 - `canvas` and `tesseract.js` are listed in `pnpm.onlyBuiltDependencies` in the root `package.json` so their native build scripts run
 
