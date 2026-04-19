@@ -134,6 +134,23 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
   const resolvedParentId = parentId === "none" ? null : parseInt(parentId, 10);
 
+  const pauseBetweenFiles = () => new Promise(resolve => setTimeout(resolve, 1500));
+
+  const getGenerationErrorMessage = (error: unknown) => {
+    if (error && typeof error === "object") {
+      const data = (error as { data?: unknown }).data;
+      if (data && typeof data === "object") {
+        const apiError = (data as { error?: unknown }).error;
+        if (typeof apiError === "string" && apiError.trim()) return apiError;
+      }
+      const message = (error as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) {
+        return message.replace(/^HTTP \d+\s+[^:]+:\s*/, "");
+      }
+    }
+    return "Generation failed";
+  };
+
   const generateOne = (text: string, deckName: string, cardCount: number | "", pid: number | null): Promise<number> =>
     generateCards.mutateAsync(
       { data: { text, deckName, cardCount: cardCount ? Number(cardCount) : undefined, parentId: pid } },
@@ -147,7 +164,8 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
       ...(hasManual ? [{ id: undefined, text: manualText, deckName: manualDeckName, cardCount: manualCardCount }] : []),
     ];
 
-    for (const t of targets) {
+    for (let i = 0; i < targets.length; i++) {
+      const t = targets[i];
       if (!t.deckName.trim()) {
         toast({ title: "Deck name required", variant: "destructive" });
         setIsGeneratingAll(false);
@@ -158,17 +176,23 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
         const count = await generateOne(t.text, t.deckName, t.cardCount, resolvedParentId);
         if (t.id) updateFile(t.id, { status: "done", progress: "", generatedCount: count });
         ok++;
-      } catch {
-        if (t.id) updateFile(t.id, { status: "error", progress: "Generation failed" });
+      } catch (error) {
+        const message = getGenerationErrorMessage(error);
+        if (t.id) updateFile(t.id, { status: "error", progress: message });
+        toast({ title: `Could not generate ${t.deckName}`, description: message, variant: "destructive" });
         fail++;
       }
+      if (i < targets.length - 1) await pauseBetweenFiles();
     }
 
     setIsGeneratingAll(false);
     queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
 
     if (ok > 0) {
-      toast({ title: ok === 1 ? "Deck generated!" : `${ok} decks generated!` });
+      toast({
+        title: ok === 1 ? "Deck generated!" : `${ok} decks generated!`,
+        description: fail > 0 ? `${fail} file${fail === 1 ? "" : "s"} still need attention.` : undefined,
+      });
       if (fail === 0) { resetState(); onDone?.(); onOpenChange(false); }
     } else {
       toast({ title: "Generation failed", variant: "destructive" });

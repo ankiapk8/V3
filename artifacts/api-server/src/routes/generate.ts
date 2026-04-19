@@ -4,6 +4,75 @@ import { GenerateCardsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getErrorStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const status = (error as { status?: unknown }).status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") return undefined;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function isRetryableAIError(error: unknown): boolean {
+  const status = getErrorStatus(error);
+  return status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+}
+
+async function createChatCompletionWithRetry(
+  openai: Awaited<ReturnType<typeof getOpenAIClient>>,
+  payload: Parameters<typeof openai.chat.completions.create>[0],
+  requestLog: { warn: (obj: unknown, message: string) => void },
+) {
+  const delays = [2000, 5000, 10000];
+
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await openai.chat.completions.create(payload);
+    } catch (error) {
+      if (!isRetryableAIError(error) || attempt >= delays.length) {
+        throw error;
+      }
+
+      const delayMs = delays[attempt];
+      requestLog.warn({ err: error, attempt: attempt + 1, delayMs }, "Retrying AI card generation");
+      await sleep(delayMs);
+    }
+  }
+}
+
+function parseGeneratedCards(rawContent: string): { front: string; back: string }[] {
+  const cleaned = rawContent
+    .replace(/```json/gi, "")
+    .replace(/```/g, "")
+    .trim();
+  const candidates = [
+    cleaned,
+    cleaned.match(/\[[\s\S]*\]/)?.[0],
+    cleaned.match(/\{[\s\S]*\}/)?.[0],
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { cards?: unknown }).cards)) {
+        return (parsed as { cards: { front: string; back: string }[] }).cards;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  return [];
+}
+
 async function getOpenAIClient() {
   if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || !process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
     throw new Error("AI card generation is not configured yet.");
@@ -46,16 +115,24 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
   let response;
   try {
     const openai = await getOpenAIClient();
-    response = await openai.chat.completions.create({
+    response = await createChatCompletionWithRetry(openai, {
       model: "gpt-5.2",
       max_completion_tokens: 8192,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-    });
+    }, req.log);
   } catch (error) {
     req.log.error({ err: error }, "AI card generation failed");
+    const status = getErrorStatus(error);
+    const code = getErrorCode(error);
+    if (status === 429 || code === "too_many_requests") {
+      res.status(429).json({
+        error: "AI is temporarily rate-limited. Wait a minute and try this file again.",
+      });
+      return;
+    }
     res.status(503).json({
       error: error instanceof Error ? error.message : "AI card generation failed.",
     });
@@ -66,8 +143,7 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
 
   let generatedCards: { front: string; back: string }[] = [];
   try {
-    const jsonMatch = rawContent.match(/\[[\s\S]*\]/);
-    if (jsonMatch) generatedCards = JSON.parse(jsonMatch[0]);
+    generatedCards = parseGeneratedCards(rawContent);
   } catch {
     req.log.error({ rawContent }, "Failed to parse AI response as JSON");
     res.status(500).json({ error: "Failed to parse AI-generated cards." });
@@ -87,7 +163,13 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
 
     const validCards = generatedCards
       .filter(c => c && typeof c.front === "string" && typeof c.back === "string")
-      .map(c => ({ deckId: deck.id, front: c.front.trim(), back: c.back.trim() }));
+      .map(c => ({ deckId: deck.id, front: c.front.trim(), back: c.back.trim() }))
+      .filter(c => c.front.length > 0 && c.back.length > 0);
+
+    if (validCards.length === 0) {
+      res.status(500).json({ error: "AI returned cards without usable fronts and backs." });
+      return;
+    }
 
     const insertedCards = await db.insert(cardsTable).values(validCards).returning();
 
