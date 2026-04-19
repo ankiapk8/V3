@@ -13,7 +13,7 @@ async function getOpenAIClient() {
   return openai;
 }
 
-router.post("/generate", async (req, res): Promise<void> => {
+router.post("/generate", async (req, res, next): Promise<void> => {
   const parsed = GenerateCardsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -79,22 +79,26 @@ Respond with a JSON array of objects with "front" (question) and "back" (answer)
     return;
   }
 
-  const [deck] = await db
-    .insert(decksTable)
-    .values({ name: deckName, parentId: parentId ?? null })
-    .returning();
+  try {
+    const [deck] = await db
+      .insert(decksTable)
+      .values({ name: deckName, parentId: parentId ?? null })
+      .returning();
 
-  const validCards = generatedCards
-    .filter(c => c && typeof c.front === "string" && typeof c.back === "string")
-    .map(c => ({ deckId: deck.id, front: c.front.trim(), back: c.back.trim() }));
+    const validCards = generatedCards
+      .filter(c => c && typeof c.front === "string" && typeof c.back === "string")
+      .map(c => ({ deckId: deck.id, front: c.front.trim(), back: c.back.trim() }));
 
-  const insertedCards = await db.insert(cardsTable).values(validCards).returning();
+    const insertedCards = await db.insert(cardsTable).values(validCards).returning();
 
-  res.status(201).json({
-    deck: { ...deck, cardCount: insertedCards.length, createdAt: deck.createdAt.toISOString() },
-    cards: insertedCards.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
-    generatedCount: insertedCards.length,
-  });
+    res.status(201).json({
+      deck: { ...deck, cardCount: insertedCards.length, createdAt: deck.createdAt.toISOString() },
+      cards: insertedCards.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+      generatedCount: insertedCards.length,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 export default router;

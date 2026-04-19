@@ -122,7 +122,7 @@ function collectAllDescendantIds(
   return [...direct.map(d => d.id), ...collectAllDescendantIds(allDecks, direct.map(d => d.id))];
 }
 
-router.post("/export-apkg", async (req, res): Promise<void> => {
+router.post("/export-apkg", async (req, res, next): Promise<void> => {
   const { deckIds, exportName } = req.body as {
     deckIds?: number[];
     exportName?: string;
@@ -139,8 +139,13 @@ router.post("/export-apkg", async (req, res): Promise<void> => {
     return;
   }
 
-  // Fetch ALL decks from DB so we can resolve the full hierarchy in-memory
-  const allDecksInDb = await db.select().from(decksTable);
+  let allDecksInDb: (typeof decksTable.$inferSelect)[];
+  try {
+    allDecksInDb = await db.select().from(decksTable);
+  } catch (err) {
+    next(err);
+    return;
+  }
 
   // Fetch requested decks
   const requestedDecks = allDecksInDb.filter(d => ids.includes(d.id));
@@ -159,7 +164,13 @@ router.post("/export-apkg", async (req, res): Promise<void> => {
 
   // Fetch all cards
   const allCardIds = allDecks.map(d => d.id);
-  const allCards = await db.select().from(cardsTable).where(inArray(cardsTable.deckId, allCardIds)).orderBy(cardsTable.createdAt);
+  let allCards: (typeof cardsTable.$inferSelect)[];
+  try {
+    allCards = await db.select().from(cardsTable).where(inArray(cardsTable.deckId, allCardIds)).orderBy(cardsTable.createdAt);
+  } catch (err) {
+    next(err);
+    return;
+  }
 
   if (allCards.length === 0) {
     res.status(400).json({ error: "Selected decks have no cards to export." });

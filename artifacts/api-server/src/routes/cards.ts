@@ -9,7 +9,7 @@ import {
 
 const router: IRouter = Router();
 
-router.patch("/cards/:id", async (req, res): Promise<void> => {
+router.patch("/cards/:id", async (req, res, next): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = UpdateCardParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -23,21 +23,25 @@ router.patch("/cards/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [card] = await db
-    .update(cardsTable)
-    .set(parsed.data)
-    .where(eq(cardsTable.id, params.data.id))
-    .returning();
+  try {
+    const [card] = await db
+      .update(cardsTable)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(eq(cardsTable.id, params.data.id))
+      .returning();
 
-  if (!card) {
-    res.status(404).json({ error: "Card not found" });
-    return;
+    if (!card) {
+      res.status(404).json({ error: "Card not found" });
+      return;
+    }
+
+    res.json({ ...card, createdAt: card.createdAt.toISOString() });
+  } catch (err) {
+    next(err);
   }
-
-  res.json({ ...card, createdAt: card.createdAt.toISOString() });
 });
 
-router.delete("/cards/:id", async (req, res): Promise<void> => {
+router.delete("/cards/:id", async (req, res, next): Promise<void> => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = DeleteCardParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -45,17 +49,21 @@ router.delete("/cards/:id", async (req, res): Promise<void> => {
     return;
   }
 
-  const [deleted] = await db
-    .delete(cardsTable)
-    .where(eq(cardsTable.id, params.data.id))
-    .returning();
+  try {
+    const [deleted] = await db
+      .delete(cardsTable)
+      .where(eq(cardsTable.id, params.data.id))
+      .returning();
 
-  if (!deleted) {
-    res.status(404).json({ error: "Card not found" });
-    return;
+    if (!deleted) {
+      res.status(404).json({ error: "Card not found" });
+      return;
+    }
+
+    res.sendStatus(204);
+  } catch (err) {
+    next(err);
   }
-
-  res.sendStatus(204);
 });
 
 export default router;
