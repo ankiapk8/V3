@@ -22,6 +22,7 @@ import {
   RotateCcw, GraduationCap, Eye, Bookmark, Play, Sparkles, Loader2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/utils";
 import { saveSession, getSavePoint, saveSavePoint, clearSavePoint, type StudySavePoint } from "@/lib/study-stats";
 import type { Card, Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
@@ -74,7 +75,7 @@ function StudyMode({ cards, deckId, deckName, onExit, savePoint }: {
     setExplanation("");
     setIsExplaining(true);
     try {
-      const resp = await fetch("/api/explain", {
+      const resp = await fetch(apiUrl("api/explain"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ front: current.front, back: current.back }),
@@ -427,7 +428,7 @@ export default function DeckDetail() {
     if (!deck) return;
     setIsExporting(true);
     try {
-      const resp = await fetch("/api/export-apkg", {
+      const resp = await fetch(apiUrl("api/export-apkg"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deckIds: [deckId], exportName: deck.name }),

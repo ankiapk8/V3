@@ -35,6 +35,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - PDF extraction in `src/lib/pdf-extraction.ts`: files >20MB skip client and go straight to server; smaller files try embedded text first, then server, then client OCR
 - Server upload uses `FormData` multipart (avoids Replit proxy limits on raw binary bodies)
 - Safari/iPad compatibility uses a `Promise.withResolvers` polyfill in `src/main.tsx` before loading the app and the legacy PDF.js build
+- Direct API fetches use the Vite base path helper in `src/lib/utils.ts` so PDF extraction, explain, and `.apkg` export requests route correctly in the preview/deployed app
 
 ### API Server (`artifacts/api-server`)
 - Express 5 backend at `/api`
@@ -42,6 +43,7 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - AI generation uses `gpt-5.2` model via Replit AI Integrations (env vars: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`)
 - The AI client is loaded lazily so missing AI configuration returns a 503 from `/api/generate` instead of crashing the server
 - Route `/api/extract-pdf` accepts both `multipart/form-data` (via multer, field name `file`) and raw `application/pdf` body; embedded text → server OCR fallback
+- The server runs a safe startup schema initializer from `@workspace/db` before listening, creating/updating `decks` and `cards` if needed for fresh databases
 - System dependency `util-linux` (provides `libuuid.so.1`) is required by the `canvas` npm package; installed via Nix
 - `canvas` and `tesseract.js` are listed in `pnpm.onlyBuiltDependencies` in the root `package.json` so their native build scripts run
 

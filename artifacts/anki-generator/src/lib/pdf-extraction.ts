@@ -1,6 +1,7 @@
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.min.mjs?url";
 import { createWorker } from "tesseract.js";
+import { apiUrl } from "@/lib/utils";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -8,7 +9,7 @@ type ProgressCallback = (message: string) => void;
 
 const MIN_TEXT_LENGTH = 20;
 const MAX_OCR_DIMENSION = 2200;
-const SERVER_EXTRACT_URL = "/api/extract-pdf";
+const SERVER_EXTRACT_URL = apiUrl("api/extract-pdf");
 const CLIENT_MAX_PAGES = 60;
 const SERVER_THRESHOLD_BYTES = 20 * 1024 * 1024; // 20 MB — prefer server for large files
 

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { apiUrl } from "@/lib/utils";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 type DeckWithParent = Deck & { parentId?: number | null };
@@ -340,7 +341,7 @@ export default function Decks() {
       const deckIds = Array.from(selectedIds);
       const selectedDecks = (decks as DeckWithParent[] | undefined)?.filter(d => selectedIds.has(d.id)) ?? [];
       const exportName = selectedDecks.length === 1 ? selectedDecks[0].name : `${selectedDecks.length} Decks`;
-      const resp = await fetch("/api/export-apkg", {
+      const resp = await fetch(apiUrl("api/export-apkg"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ deckIds, exportName }),
