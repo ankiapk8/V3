@@ -9,8 +9,52 @@ export type StudySession = {
   date: string; // YYYY-MM-DD
 };
 
+export type StudySavePoint = {
+  deckId: number;
+  cardIds: number[];   // ordered card IDs (preserves shuffle order)
+  index: number;
+  knownIds: number[];
+  unknownIds: number[];
+  savedAt: string;     // ISO string
+};
+
 const STORAGE_KEY = "ankigen_study_sessions";
+const SAVE_POINT_KEY = "ankigen_save_points";
 const MAX_SESSIONS = 500;
+
+export function getSavePoint(deckId: number): StudySavePoint | null {
+  try {
+    const raw = localStorage.getItem(SAVE_POINT_KEY);
+    if (!raw) return null;
+    const map = JSON.parse(raw) as Record<number, StudySavePoint>;
+    return map[deckId] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveSavePoint(point: StudySavePoint): void {
+  try {
+    const raw = localStorage.getItem(SAVE_POINT_KEY);
+    const map: Record<number, StudySavePoint> = raw ? JSON.parse(raw) : {};
+    map[point.deckId] = point;
+    localStorage.setItem(SAVE_POINT_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
+
+export function clearSavePoint(deckId: number): void {
+  try {
+    const raw = localStorage.getItem(SAVE_POINT_KEY);
+    if (!raw) return;
+    const map = JSON.parse(raw) as Record<number, StudySavePoint>;
+    delete map[deckId];
+    localStorage.setItem(SAVE_POINT_KEY, JSON.stringify(map));
+  } catch {
+    // ignore
+  }
+}
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);

@@ -19,10 +19,10 @@ import { Progress } from "@/components/ui/progress";
 import { 
   ArrowLeft, Download, Trash2, Edit2, Check, X, 
   FileText, BookOpen, Shuffle, ChevronLeft, ChevronRight,
-  RotateCcw, GraduationCap, Eye
+  RotateCcw, GraduationCap, Eye, Bookmark, Play
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { saveSession } from "@/lib/study-stats";
+import { saveSession, getSavePoint, saveSavePoint, clearSavePoint, type StudySavePoint } from "@/lib/study-stats";
 import type { Card, Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 type DeckWithSubDecks = Deck & { subDecks?: Deck[] };
@@ -36,13 +36,28 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
-function StudyMode({ cards, deckId, deckName, onExit }: { cards: Card[]; deckId: number; deckName: string; onExit: () => void }) {
+function StudyMode({ cards, deckId, deckName, onExit, savePoint }: {
+  cards: Card[];
+  deckId: number;
+  deckName: string;
+  onExit: () => void;
+  savePoint?: StudySavePoint | null;
+}) {
+  const buildInitialDeck = () => {
+    if (savePoint) {
+      const byId = new Map(cards.map(c => [c.id, c]));
+      const ordered = savePoint.cardIds.map(id => byId.get(id)).filter(Boolean) as Card[];
+      return ordered.length === cards.length ? ordered : cards;
+    }
+    return cards;
+  };
+
   const [shuffled, setShuffled] = useState(false);
-  const [deck, setDeck] = useState<Card[]>(cards);
-  const [index, setIndex] = useState(0);
+  const [deck, setDeck] = useState<Card[]>(buildInitialDeck);
+  const [index, setIndex] = useState(savePoint ? Math.min(savePoint.index, Math.max(0, cards.length - 1)) : 0);
   const [revealed, setRevealed] = useState(false);
-  const [known, setKnown] = useState<Set<number>>(new Set());
-  const [unknown, setUnknown] = useState<Set<number>>(new Set());
+  const [known, setKnown] = useState<Set<number>>(new Set(savePoint?.knownIds ?? []));
+  const [unknown, setUnknown] = useState<Set<number>>(new Set(savePoint?.unknownIds ?? []));
   const [done, setDone] = useState(false);
   const [flipping, setFlipping] = useState(false);
   const savedRef = useRef(false);
@@ -51,9 +66,23 @@ function StudyMode({ cards, deckId, deckName, onExit }: { cards: Card[]; deckId:
   const total = deck.length;
   const progress = total > 0 ? Math.round(((known.size + unknown.size) / total) * 100) : 0;
 
+  // Auto-save progress whenever position or results change
+  useEffect(() => {
+    if (done) return;
+    saveSavePoint({
+      deckId,
+      cardIds: deck.map(c => c.id),
+      index,
+      knownIds: Array.from(known),
+      unknownIds: Array.from(unknown),
+      savedAt: new Date().toISOString(),
+    });
+  }, [deckId, deck, index, known, unknown, done]);
+
   useEffect(() => {
     if (done && !savedRef.current && (known.size + unknown.size) > 0) {
       savedRef.current = true;
+      clearSavePoint(deckId);
       saveSession({
         deckId,
         deckName,
@@ -64,6 +93,18 @@ function StudyMode({ cards, deckId, deckName, onExit }: { cards: Card[]; deckId:
       });
     }
   }, [done, known.size, unknown.size, deckId, deckName]);
+
+  const handleSaveAndExit = useCallback(() => {
+    saveSavePoint({
+      deckId,
+      cardIds: deck.map(c => c.id),
+      index,
+      knownIds: Array.from(known),
+      unknownIds: Array.from(unknown),
+      savedAt: new Date().toISOString(),
+    });
+    onExit();
+  }, [deckId, deck, index, known, unknown, onExit]);
 
   const handleShuffle = useCallback(() => {
     const next = shuffled ? cards : shuffleArray(cards);
@@ -77,13 +118,14 @@ function StudyMode({ cards, deckId, deckName, onExit }: { cards: Card[]; deckId:
   }, [shuffled, cards]);
 
   const handleRestart = useCallback(() => {
+    clearSavePoint(deckId);
     setDeck(shuffled ? shuffleArray(cards) : cards);
     setIndex(0);
     setRevealed(false);
     setKnown(new Set());
     setUnknown(new Set());
     setDone(false);
-  }, [shuffled, cards]);
+  }, [shuffled, cards, deckId]);
 
   const transition = useCallback((fn: () => void) => {
     setFlipping(true);
@@ -177,8 +219,8 @@ function StudyMode({ cards, deckId, deckName, onExit }: { cards: Card[]; deckId:
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between">
-        <Button variant="ghost" size="sm" onClick={onExit} className="gap-1.5 text-muted-foreground">
-          <ArrowLeft className="h-4 w-4" /> Exit study
+        <Button variant="ghost" size="sm" onClick={handleSaveAndExit} className="gap-1.5 text-muted-foreground">
+          <Bookmark className="h-4 w-4" /> Save & Exit
         </Button>
         <div className="flex items-center gap-2">
           <Button
@@ -302,6 +344,18 @@ export default function DeckDetail() {
   const deleteCard = useDeleteCard();
   const [isExporting, setIsExporting] = useState(false);
   const [studyMode, setStudyMode] = useState(false);
+  const [activeSavePoint, setActiveSavePoint] = useState<StudySavePoint | null>(null);
+  const [resumePrompt, setResumePrompt] = useState<StudySavePoint | null>(null);
+
+  const handleStudyClick = useCallback(() => {
+    const sp = getSavePoint(deckId);
+    if (sp && sp.index > 0) {
+      setResumePrompt(sp);
+    } else {
+      setActiveSavePoint(null);
+      setStudyMode(true);
+    }
+  }, [deckId]);
 
   const deckWithSubs = deck as DeckWithSubDecks | undefined;
   const subDecks = deckWithSubs?.subDecks ?? [];
@@ -362,7 +416,78 @@ export default function DeckDetail() {
             <GraduationCap className="h-3.5 w-3.5" /> Study Mode
           </Badge>
         </div>
-        <StudyMode cards={cardList} deckId={deck.id} deckName={deck.name} onExit={() => setStudyMode(false)} />
+        <StudyMode
+          cards={cardList}
+          deckId={deck.id}
+          deckName={deck.name}
+          savePoint={activeSavePoint}
+          onExit={() => { setStudyMode(false); setActiveSavePoint(null); }}
+        />
+      </div>
+    );
+  }
+
+  if (resumePrompt) {
+    const savedTime = new Date(resumePrompt.savedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    const progress = resumePrompt.cardIds.length > 0
+      ? Math.round(((resumePrompt.knownIds.length + resumePrompt.unknownIds.length) / resumePrompt.cardIds.length) * 100)
+      : 0;
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-6 animate-in fade-in duration-300 px-4">
+        <div className="w-full max-w-sm space-y-6">
+          <div className="text-center space-y-2">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-2">
+              <Bookmark className="h-7 w-7 text-primary" />
+            </div>
+            <h2 className="text-xl font-serif font-bold text-primary">Resume where you left off?</h2>
+            <p className="text-sm text-muted-foreground">You saved a study session on {savedTime}</p>
+          </div>
+
+          <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Card</span>
+              <span className="font-medium">{resumePrompt.index + 1} / {resumePrompt.cardIds.length}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Got it</span>
+              <span className="font-medium text-green-600">{resumePrompt.knownIds.length}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Still learning</span>
+              <span className="font-medium text-red-500">{resumePrompt.unknownIds.length}</span>
+            </div>
+            <Progress value={progress} className="h-1.5 mt-1" />
+            <p className="text-xs text-center text-muted-foreground">{progress}% answered</p>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            <Button
+              className="w-full gap-2"
+              onClick={() => {
+                setActiveSavePoint(resumePrompt);
+                setResumePrompt(null);
+                setStudyMode(true);
+              }}
+            >
+              <Play className="h-4 w-4" /> Continue from card {resumePrompt.index + 1}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => {
+                clearSavePoint(deckId);
+                setActiveSavePoint(null);
+                setResumePrompt(null);
+                setStudyMode(true);
+              }}
+            >
+              <RotateCcw className="h-4 w-4" /> Start fresh
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => setResumePrompt(null)}>
+              <ArrowLeft className="h-4 w-4 mr-1.5" /> Back to deck
+            </Button>
+          </div>
+        </div>
       </div>
     );
   }
@@ -388,11 +513,14 @@ export default function DeckDetail() {
           {cardList.length > 0 && (
             <Button 
               variant="outline" 
-              onClick={() => setStudyMode(true)} 
+              onClick={handleStudyClick} 
               className="gap-2"
             >
               <BookOpen className="h-4 w-4" />
               Study
+              {getSavePoint(deckId)?.index ? (
+                <Badge variant="secondary" className="ml-1 h-4 px-1.5 text-[10px]">resume</Badge>
+              ) : null}
             </Button>
           )}
           <Button onClick={handleExport} disabled={isExporting} className="gap-2">
