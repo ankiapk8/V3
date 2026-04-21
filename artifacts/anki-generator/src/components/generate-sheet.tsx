@@ -18,14 +18,15 @@ import { apiUrl } from "@/lib/utils";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 const DEFAULT_TARGET_CARDS = 20;
-const CHARS_PER_CARD = 400;
+const CHARS_PER_CARD = 220;
+const MAX_CAPACITY = 200;
 
 function estimateCardCapacity(text: string, pageImages: number): number {
   const chars = text.trim().length;
   if (chars === 0 && pageImages === 0) return 0;
   const textCards = Math.round(chars / CHARS_PER_CARD);
-  const visualCards = Math.min(pageImages, 20);
-  return Math.max(3, Math.min(80, textCards + visualCards));
+  const visualCards = Math.min(pageImages, 50);
+  return Math.max(3, Math.min(MAX_CAPACITY, textCards + visualCards));
 }
 
 function estimatedCards(text: string, pageImages: number, target: number | ""): number {
