@@ -113,24 +113,34 @@ Rules:
 - Each card should be self-contained (understandable without context)
 - Use simple, clear language
 - When the source contains diagrams, tables, charts, or figures, create cards that reference them${hasImages ? `
-- For cards that are specifically about a visual element (diagram, table, chart, anatomical illustration, flowchart, etc.) from a page, include an "imageIndex" field (0-based integer) identifying which page image to attach to the card
-- Only include imageIndex when the visual content is essential to understanding the card` : ""}
+
+VISUAL CARDS — ATTACH IMAGES GENEROUSLY:
+- You are also given the rendered page images (in order, 0-based indices). Inspect them carefully.
+- Whenever a page contains a meaningful visual — diagrams, anatomical illustrations, X-rays, CT/MRI scans, ECGs, dermatology photos, microscopy slides, charts, tables, flowcharts, algorithms, decision trees, graphs, equations, labelled figures — CREATE at least one card about that visual and attach it via "imageIndex" (the 0-based index of the page image).
+- Prefer creating image-anchored cards over pure-text cards when a strong visual is present on a page. Visual recall is critical for medical/clinical learning.
+- A card that asks the learner to identify, interpret, or describe a visual MUST have "imageIndex" set.
+- Do NOT attach images to cards that are about plain text on that page (definitions, lists, prose) — only attach when the visual itself is the subject of the question.
+- It is perfectly fine for several cards to share the same imageIndex (e.g. one image → multiple questions about its features).
+- If a page is purely text (no meaningful visual), don't attach its image to any card.` : ""}
 
 Respond with a JSON array of objects with "front" (question), "back" (answer)${hasImages ? ', and optionally "imageIndex" (integer, 0-based, references the page image)' : ""} fields only. No markdown, no explanation, just the JSON array.`;
 
   const textContent = `Generate exactly ${maxCards} Anki flashcards from the following content. Return only a JSON array:\n\n${text.slice(0, 20000)}`;
 
-  type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "low" } };
+  type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } };
   let userMessageContent: string | ContentPart[];
 
   if (hasImages && selectedImages.length > 0) {
+    const indexedTextContent =
+      textContent +
+      `\n\nPAGE IMAGES PROVIDED (${selectedImages.length} total): they follow this message in order. Image at imageIndex 0 is the first one, imageIndex ${selectedImages.length - 1} is the last.`;
     userMessageContent = [
-      { type: "text" as const, text: textContent },
+      { type: "text" as const, text: indexedTextContent },
       ...selectedImages.map((imgData): ContentPart => ({
         type: "image_url" as const,
         image_url: {
           url: imgData.startsWith("data:") ? imgData : `data:image/jpeg;base64,${imgData}`,
-          detail: "low" as const,
+          detail: "high" as const,
         },
       })),
     ];
