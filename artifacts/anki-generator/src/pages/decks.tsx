@@ -449,16 +449,27 @@ export default function Decks() {
     handleDelete,
   };
 
+  const allDecksCount = (decks as DeckWithParent[])?.length ?? 0;
+  const topicsCount = rootDecks.length;
+  const subDecksCount = allDecksCount - topicsCount;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500 pb-32">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-3xl font-serif font-bold text-primary tracking-tight">Library</h1>
-          <p className="text-muted-foreground mt-1">
-            {isLoading
-              ? "Loading…"
-              : `${(decks as DeckWithParent[])?.length ?? 0} deck${((decks as DeckWithParent[])?.length ?? 0) !== 1 ? "s" : ""} · ${totalCards} card${totalCards !== 1 ? "s" : ""} total`}
-          </p>
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="h-11 w-11 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shrink-0 shadow-sm">
+            <Layers className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-serif font-bold text-primary tracking-tight leading-none">Library</h1>
+            <p className="text-muted-foreground text-sm mt-1.5">
+              {isLoading
+                ? "Loading…"
+                : allDecksCount === 0
+                ? "Your flashcard decks will appear here."
+                : `${allDecksCount} deck${allDecksCount !== 1 ? "s" : ""} · ${totalCards} card${totalCards !== 1 ? "s" : ""} total`}
+            </p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -558,12 +569,40 @@ export default function Decks() {
         </div>
       </div>
 
-      {((decks as DeckWithParent[])?.length ?? 0) > 0 && (
+      {allDecksCount > 0 && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              <FolderOpen className="h-3.5 w-3.5 text-primary" /> Topics
+            </div>
+            <div className="mt-1.5 text-2xl font-serif font-bold text-foreground">{topicsCount}</div>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              <FileText className="h-3.5 w-3.5 text-blue-500" /> Sub-decks
+            </div>
+            <div className="mt-1.5 text-2xl font-serif font-bold text-foreground">{subDecksCount}</div>
+          </div>
+          <div className="rounded-xl border border-border/60 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground uppercase tracking-wider font-medium">
+              <Layers className="h-3.5 w-3.5 text-violet-500" /> Total cards
+            </div>
+            <div className="mt-1.5 text-2xl font-serif font-bold text-foreground">{totalCards}</div>
+          </div>
+        </div>
+      )}
+
+      {allDecksCount > 0 && (
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-          <Input placeholder="Search decks…" value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search decks by name or description…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-10 pr-10 h-11 rounded-xl bg-card/60 backdrop-blur-sm border-border/60 shadow-sm focus-visible:ring-primary/30 focus-visible:border-primary/40"
+          />
           {search && (
-            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <button onClick={() => setSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted transition-colors" aria-label="Clear search">
               <X className="h-4 w-4" />
             </button>
           )}
@@ -571,26 +610,31 @@ export default function Decks() {
       )}
 
       {isLoading ? (
-        <div className="space-y-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
+        <div className="space-y-3">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 rounded-xl" />)}</div>
       ) : rootDecks.length === 0 ? (
-        <div className="text-center py-20 border-2 border-dashed rounded-xl bg-card">
-          <BookOpen className="mx-auto h-12 w-12 text-muted-foreground opacity-40 mb-4" />
-          <h3 className="text-lg font-medium mb-1">No decks yet</h3>
-          <p className="text-muted-foreground text-sm mb-5">Start by creating a main topic or generating cards with AI.</p>
-          <div className="flex items-center justify-center gap-2">
-            <Button variant="outline" onClick={() => openDeckForm({ type: "new-topic" })}>
-              <FolderOpen className="mr-2 h-4 w-4" /> New Topic
+        <div className="text-center py-20 px-6 border-2 border-dashed border-border/60 rounded-2xl bg-gradient-to-b from-card/60 to-muted/20">
+          <div className="mx-auto h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/20 flex items-center justify-center mb-5 shadow-sm">
+            <BookOpen className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className="text-xl font-serif font-semibold mb-1.5">Your library is empty</h3>
+          <p className="text-muted-foreground text-sm mb-6 max-w-sm mx-auto">Start by creating a main topic or let AI generate flashcards from your study material.</p>
+          <div className="flex items-center justify-center gap-2 flex-wrap">
+            <Button variant="outline" className="gap-2 h-10" onClick={() => openDeckForm({ type: "new-topic" })}>
+              <FolderOpen className="h-4 w-4" /> New Topic
             </Button>
-            <Button onClick={() => setGenerateSheetOpen(true)}>
-              <Sparkles className="mr-2 h-4 w-4" /> Generate with AI
+            <Button className="gap-2 h-10 shadow-sm" onClick={() => setGenerateSheetOpen(true)}>
+              <Sparkles className="h-4 w-4" /> Generate with AI
             </Button>
           </div>
         </div>
       ) : filteredRoot.length === 0 ? (
-        <div className="text-center py-16 border-2 border-dashed rounded-xl bg-card">
-          <Search className="mx-auto h-10 w-10 text-muted-foreground opacity-40 mb-3" />
+        <div className="text-center py-16 px-6 border-2 border-dashed border-border/60 rounded-2xl bg-card/60">
+          <div className="mx-auto h-12 w-12 rounded-xl bg-muted flex items-center justify-center mb-4">
+            <Search className="h-5 w-5 text-muted-foreground" />
+          </div>
           <p className="font-medium">No decks match "{search}"</p>
-          <Button variant="ghost" className="mt-2" onClick={() => setSearch("")}>Clear search</Button>
+          <p className="text-sm text-muted-foreground mt-1">Try a different search term.</p>
+          <Button variant="ghost" className="mt-3" onClick={() => setSearch("")}>Clear search</Button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -607,11 +651,17 @@ export default function Decks() {
 
       {selectMode && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-4 duration-200">
-          <div className="flex items-center gap-3 bg-card border border-border shadow-2xl rounded-2xl px-5 py-3">
-            <span className="text-sm font-medium">
-              {selectedIds.size === 0 ? "Select decks to export" : `${selectedIds.size} selected`}
-            </span>
-            <Button onClick={handleExportApkg} disabled={selectedIds.size === 0 || exporting} className="gap-2">
+          <div className="flex items-center gap-3 bg-card/95 backdrop-blur-md border border-border shadow-2xl rounded-2xl px-4 py-2.5 pl-5">
+            <div className="flex items-center gap-2">
+              <div className={`h-7 w-7 rounded-full flex items-center justify-center ${selectedIds.size > 0 ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"}`}>
+                <CheckSquare className="h-3.5 w-3.5" />
+              </div>
+              <span className="text-sm font-medium">
+                {selectedIds.size === 0 ? "Select decks to export" : `${selectedIds.size} deck${selectedIds.size !== 1 ? "s" : ""} selected`}
+              </span>
+            </div>
+            <div className="h-5 w-px bg-border" />
+            <Button onClick={handleExportApkg} disabled={selectedIds.size === 0 || exporting} className="gap-2 shadow-sm">
               <Download className="h-4 w-4" />
               {exporting ? "Exporting…" : "Export .apkg"}
             </Button>
