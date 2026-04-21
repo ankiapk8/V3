@@ -35,6 +35,7 @@ import type { Card, Deck } from "@workspace/api-client-react/src/generated/api.s
 import { Drawer } from "vaul";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { CropCompare, parseBbox } from "@/components/crop-compare";
 
 type DeckWithSubDecks = Deck & { subDecks?: Deck[] };
 
@@ -337,23 +338,20 @@ function StudyMode({ cards, deckId, deckName, onExit, savePoint }: {
                 <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">Q</span>
                 Front
               </div>
-              {(current as Card & { image?: string | null })?.image && (
-                <div
-                  className="mb-4 rounded-lg overflow-hidden border border-border/40 bg-background relative group/img cursor-zoom-in"
-                  onClick={() => setLightboxSrc((current as Card & { image?: string | null }).image!)}
-                >
-                  <img
-                    src={(current as Card & { image?: string | null }).image!}
-                    alt="Card visual"
-                    className="w-full h-auto max-h-72 object-contain"
-                  />
-                  <div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/20 transition-colors flex items-center justify-center">
-                    <div className="opacity-0 group-hover/img:opacity-100 transition-opacity bg-black/60 text-white rounded-full p-2">
-                      <ZoomIn className="h-5 w-5" />
-                    </div>
+              {(() => {
+                const c = current as Card & { image?: string | null; sourceImage?: string | null; bbox?: string | null };
+                if (!c?.image) return null;
+                return (
+                  <div className="mb-4">
+                    <CropCompare
+                      image={c.image}
+                      sourceImage={c.sourceImage}
+                      bbox={parseBbox(c.bbox)}
+                      onLightbox={setLightboxSrc}
+                    />
                   </div>
-                </div>
-              )}
+                );
+              })()}
               <p className="text-lg sm:text-xl font-medium text-foreground leading-relaxed flex-1">
                 {current?.front}
               </p>
@@ -967,15 +965,19 @@ function EditableCard({
               </span>
             )}
           </div>
-          {(card as Card & { image?: string | null }).image && (
-            <div className="mb-3 rounded-md overflow-hidden border border-border/40">
-              <img
-                src={(card as Card & { image?: string | null }).image!}
-                alt="Card visual"
-                className="w-full h-auto max-h-48 object-contain bg-background"
-              />
-            </div>
-          )}
+          {(() => {
+            const c = card as Card & { image?: string | null; sourceImage?: string | null; bbox?: string | null };
+            if (!c.image) return null;
+            return (
+              <div className="mb-3">
+                <CropCompare
+                  image={c.image}
+                  sourceImage={c.sourceImage}
+                  bbox={parseBbox(c.bbox)}
+                />
+              </div>
+            );
+          })()}
           <p className="font-medium text-foreground whitespace-pre-wrap leading-relaxed">{card.front}</p>
         </div>
         <div className="flex-1 p-4 sm:p-5">

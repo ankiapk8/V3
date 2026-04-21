@@ -37,6 +37,10 @@ export interface Card {
   tags?: string | null;
   /** @nullable */
   image?: string | null;
+  /** @nullable */
+  sourceImage?: string | null;
+  /** @nullable */
+  bbox?: string | null;
   createdAt: string;
 }
 

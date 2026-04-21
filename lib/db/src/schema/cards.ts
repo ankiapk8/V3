@@ -10,6 +10,8 @@ export const cardsTable = pgTable("cards", {
   back: text("back").notNull(),
   tags: text("tags"),
   image: text("image"),
+  sourceImage: text("source_image"),
+  bbox: text("bbox"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

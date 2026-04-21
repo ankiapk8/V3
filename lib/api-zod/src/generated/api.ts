@@ -96,6 +96,8 @@ export const ListDeckCardsResponseItem = zod.object({
   back: zod.string(),
   tags: zod.string().nullish(),
   image: zod.string().nullish(),
+  sourceImage: zod.string().nullish(),
+  bbox: zod.string().nullish(),
   createdAt: zod.string(),
 });
 export const ListDeckCardsResponse = zod.array(ListDeckCardsResponseItem);
@@ -120,6 +122,8 @@ export const UpdateCardResponse = zod.object({
   back: zod.string(),
   tags: zod.string().nullish(),
   image: zod.string().nullish(),
+  sourceImage: zod.string().nullish(),
+  bbox: zod.string().nullish(),
   createdAt: zod.string(),
 });
 

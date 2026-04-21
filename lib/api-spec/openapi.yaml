@@ -291,6 +291,10 @@ components:
           type: ["string", "null"]
         image:
           type: ["string", "null"]
+        sourceImage:
+          type: ["string", "null"]
+        bbox:
+          type: ["string", "null"]
         createdAt:
           type: string
       required:

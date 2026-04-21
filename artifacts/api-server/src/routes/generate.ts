@@ -96,6 +96,7 @@ async function getOpenAIClient() {
 type RawCard = { front: string; back: string };
 type Bbox = { x: number; y: number; w: number; h: number };
 type VisualRawCard = { pageIndex: number; front: string; back: string; bbox?: Bbox };
+type VisualCardResult = { front: string; back: string; image: string; sourceImage: string; bbox: Bbox | null };
 
 function clamp01(n: unknown, fallback: number): number {
   const v = typeof n === "number" && Number.isFinite(n) ? n : fallback;
@@ -152,6 +153,25 @@ async function cropImage(dataUrlOrB64: string, bbox: Bbox | null): Promise<strin
     const ctx = canvas.getContext("2d");
     ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
     return canvas.toDataURL("image/jpeg", 0.92);
+  } catch {
+    return src;
+  }
+}
+
+const SOURCE_THUMB_MAX = 720;
+
+async function downscaleSourcePage(dataUrlOrB64: string): Promise<string> {
+  const src = dataUrlOrB64.startsWith("data:") ? dataUrlOrB64 : `data:image/jpeg;base64,${dataUrlOrB64}`;
+  try {
+    const img = await loadImage(src);
+    if (img.width <= SOURCE_THUMB_MAX) return src;
+    const scale = SOURCE_THUMB_MAX / img.width;
+    const w = SOURCE_THUMB_MAX;
+    const h = Math.round(img.height * scale);
+    const canvas = createCanvas(w, h);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.78);
   } catch {
     return src;
   }
@@ -270,7 +290,7 @@ async function generateAllVisualCards(
   requestLog: { warn: (obj: unknown, message: string) => void },
   onBatchGroupDone?: (doneBatches: number, totalBatches: number) => void,
   signal?: AbortSignal,
-): Promise<{ front: string; back: string; image: string }[]> {
+): Promise<VisualCardResult[]> {
   const pagesToProcess = images.slice(0, MAX_VISUAL_PAGES);
   const batches: { start: number; imgs: string[] }[] = [];
 
@@ -283,7 +303,7 @@ async function generateAllVisualCards(
     ? Math.max(1, Math.min(3, Math.ceil(targetCount / pagesToProcess.length)))
     : 2;
 
-  const results: { front: string; back: string; image: string }[] = [];
+  const results: VisualCardResult[] = [];
   let doneBatches = 0;
 
   for (let i = 0; i < batches.length; i += VISUAL_CONCURRENCY) {
@@ -291,14 +311,22 @@ async function generateAllVisualCards(
     const chunk = batches.slice(i, i + VISUAL_CONCURRENCY);
     const settled = await Promise.allSettled(
       chunk.map(b => generateVisualCardsForBatch(openai, b.imgs, b.start, cardsPerPage, requestLog, signal).then(async cards => {
-        const out: { front: string; back: string; image: string }[] = [];
+        const out: VisualCardResult[] = [];
+        const thumbCache = new Map<number, string>();
         for (const c of cards) {
           if (c.pageIndex < 0 || c.pageIndex >= b.imgs.length) continue;
           const cropped = await cropImage(b.imgs[c.pageIndex], c.bbox ?? null);
+          let thumb = thumbCache.get(c.pageIndex);
+          if (!thumb) {
+            thumb = await downscaleSourcePage(b.imgs[c.pageIndex]);
+            thumbCache.set(c.pageIndex, thumb);
+          }
           out.push({
             front: c.front.trim(),
             back: c.back.trim(),
             image: cropped,
+            sourceImage: thumb,
+            bbox: c.bbox ?? null,
           });
         }
         return out;
@@ -390,7 +418,7 @@ router.post("/generate/stream", async (req, res, next): Promise<void> => {
   const VISUAL_END = 85;
 
   let textCards: RawCard[] = [];
-  let visualCards: { front: string; back: string; image: string }[] = [];
+  let visualCards: VisualCardResult[] = [];
 
   try {
     const textPromise = wantText
@@ -486,6 +514,8 @@ router.post("/generate/stream", async (req, res, next): Promise<void> => {
           front: c.front,
           back: c.back,
           image: c.image.startsWith("data:") ? c.image : `data:image/jpeg;base64,${c.image}`,
+          sourceImage: c.sourceImage ?? null,
+          bbox: c.bbox ? JSON.stringify(c.bbox) : null,
         }))
       ).returning();
       totalInserted += inserted.length;
@@ -547,7 +577,7 @@ router.post("/generate", async (req, res, next): Promise<void> => {
   }
 
   let textCards: RawCard[] = [];
-  let visualCards: { front: string; back: string; image: string }[] = [];
+  let visualCards: VisualCardResult[] = [];
 
   try {
     [textCards, visualCards] = await Promise.all([
@@ -606,6 +636,8 @@ router.post("/generate", async (req, res, next): Promise<void> => {
           front: c.front,
           back: c.back,
           image: c.image.startsWith("data:") ? c.image : `data:image/jpeg;base64,${c.image}`,
+          sourceImage: c.sourceImage ?? null,
+          bbox: c.bbox ? JSON.stringify(c.bbox) : null,
         }))
       ).returning();
       allInserted.push(...inserted);
