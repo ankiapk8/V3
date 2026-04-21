@@ -12,7 +12,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
-import { UploadCloud, X, CheckCircle2, AlertCircle, Loader2, FileText, Sparkles, FolderOpen, ImageIcon } from "lucide-react";
+import { UploadCloud, X, CheckCircle2, AlertCircle, Loader2, FileText, Sparkles, FolderOpen, ImageIcon, ArrowLeft } from "lucide-react";
 import { extractPdf, isPdfFile, isTextFile } from "@/lib/pdf-extraction";
 import { apiUrl } from "@/lib/utils";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
@@ -374,7 +374,17 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0 bg-gradient-to-b from-background to-muted/20">
-        <div className="px-6 pt-6 pb-4 border-b bg-background/60 backdrop-blur-sm sticky top-0 z-10">
+        <div className="px-6 pt-5 pb-4 border-b bg-background/60 backdrop-blur-sm sticky top-0 z-10">
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            disabled={isGeneratingAll}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors mb-3 -ml-1 px-1 py-0.5 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
+            aria-label="Back"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" />
+            Back
+          </button>
           <SheetHeader>
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shrink-0">
