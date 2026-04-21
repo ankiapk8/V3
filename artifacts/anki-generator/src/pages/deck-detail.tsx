@@ -20,8 +20,14 @@ import {
   ArrowLeft, Download, Trash2, Edit2, Check, X, 
   FileText, BookOpen, Shuffle, ChevronLeft, ChevronRight,
   RotateCcw, GraduationCap, Eye, Bookmark, Play, Sparkles, Loader2,
-  Brain, ClipboardList, Stethoscope
+  Brain, ClipboardList, Stethoscope, ChevronDown, FileJson, Package
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiUrl } from "@/lib/utils";
 import { saveSession, getSavePoint, saveSavePoint, clearSavePoint, type StudySavePoint } from "@/lib/study-stats";
@@ -537,6 +543,33 @@ export default function DeckDetail() {
   const subDecks = deckWithSubs?.subDecks ?? [];
   const hasSubDecks = subDecks.length > 0;
 
+  const handleExportJson = async () => {
+    if (!deck) return;
+    setIsExporting(true);
+    try {
+      const resp = await fetch(apiUrl(`api/decks/${deckId}/export-json`));
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        throw new Error(err.error ?? "Export failed.");
+      }
+      const blob = await resp.blob();
+      const url = URL.createObjectURL(blob);
+      const a = Object.assign(document.createElement("a"), {
+        href: url,
+        download: `${deck.name.replace(/[^a-z0-9_\-]/gi, "_")}.ankigen.json`,
+      });
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exported", description: `Saved ${deck.name}.ankigen.json — import it on any device from the Library page.` });
+    } catch (err) {
+      toast({ title: "Export failed", description: err instanceof Error ? err.message : "Something went wrong.", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const handleExport = async () => {
     if (!deck) return;
     setIsExporting(true);
@@ -699,10 +732,31 @@ export default function DeckDetail() {
               ) : null}
             </Button>
           )}
-          <Button onClick={handleExport} disabled={isExporting} className="gap-2">
-            <Download className="h-4 w-4" />
-            Export for Anki
-          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button disabled={isExporting} className="gap-2">
+                <Download className="h-4 w-4" />
+                {isExporting ? "Exporting…" : "Export"}
+                <ChevronDown className="h-3.5 w-3.5 opacity-70" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={handleExport}>
+                <Package className="h-4 w-4 text-primary" />
+                <div>
+                  <div className="text-sm font-medium">Anki package (.apkg)</div>
+                  <div className="text-xs text-muted-foreground">Import into Anki desktop/mobile</div>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="gap-2.5 cursor-pointer" onClick={handleExportJson}>
+                <FileJson className="h-4 w-4 text-blue-500" />
+                <div>
+                  <div className="text-sm font-medium">AnkiGen file (.json)</div>
+                  <div className="text-xs text-muted-foreground">Move this deck to another device</div>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

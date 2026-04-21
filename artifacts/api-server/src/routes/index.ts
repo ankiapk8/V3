@@ -6,6 +6,7 @@ import generateRouter from "./generate";
 import exportApkgRouter from "./export-apkg";
 import extractPdfRouter from "./extract-pdf";
 import explainRouter from "./explain";
+import transferRouter from "./transfer";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(generateRouter);
 router.use(exportApkgRouter);
 router.use(extractPdfRouter);
 router.use(explainRouter);
+router.use(transferRouter);
 
 export default router;

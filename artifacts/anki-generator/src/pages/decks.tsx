@@ -20,7 +20,7 @@ import { DeckFormSheet, type DeckFormMode } from "@/components/deck-form-sheet";
 import {
   Trash2, Layers, Plus, Download, CheckSquare, X, Search,
   FileText, FolderOpen, ChevronDown, ChevronRight, Pencil,
-  Sparkles, BookOpen,
+  Sparkles, BookOpen, Upload,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -259,6 +259,37 @@ export default function Decks() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportJson = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      const text = await file.text();
+      let parsed: unknown;
+      try { parsed = JSON.parse(text); }
+      catch { throw new Error("That file isn't valid JSON."); }
+      const resp = await fetch(apiUrl("api/import-deck-json"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parsed),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) throw new Error(data.error ?? "Import failed.");
+      queryClient.invalidateQueries({ queryKey: getListDecksQueryKey() });
+      toast({
+        title: "Deck imported",
+        description: `“${data.importedName}” added — ${data.deckCount} deck${data.deckCount !== 1 ? "s" : ""}, ${data.cardCount} card${data.cardCount !== 1 ? "s" : ""}.`,
+      });
+    } catch (err) {
+      toast({ title: "Import failed", description: err instanceof Error ? err.message : "Something went wrong.", variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
   const [collapsedIds, setCollapsedIds] = useState<Set<number>>(new Set());
   const initializedRef = useRef(false);
 
@@ -389,6 +420,22 @@ export default function Decks() {
                   <CheckSquare className="h-4 w-4" /> Select
                 </Button>
               )}
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+                title="Import a deck from another device (.ankigen.json)"
+              >
+                <Upload className="h-4 w-4" /> {importing ? "Importing…" : "Import"}
+              </Button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".json,application/json"
+                className="hidden"
+                onChange={handleImportJson}
+              />
               <Button variant="outline" className="gap-2" onClick={() => openDeckForm({ type: "new-topic" })}>
                 <FolderOpen className="h-4 w-4" /> New Topic
               </Button>
