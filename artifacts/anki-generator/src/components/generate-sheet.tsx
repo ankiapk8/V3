@@ -403,9 +403,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
           {/* ── Generate tab ── */}
           <TabsContent value="generate" className="space-y-5 mt-0">
-            {parentOptions.length > 0 && (
-              <ParentSelector value={parentId} onChange={setParentId} />
-            )}
+            <ParentSelector value={parentId} onChange={setParentId} />
 
             {/* Drop zone */}
             <div
@@ -631,9 +629,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
           {/* ── Empty deck tab ── */}
           <TabsContent value="empty" className="space-y-4 mt-0">
-            {parentOptions.length > 0 && (
-              <ParentSelector value={emptyParentId} onChange={setEmptyParentId} />
-            )}
+            <ParentSelector value={emptyParentId} onChange={setEmptyParentId} />
             <div className="space-y-2">
               <Label htmlFor="emptyName">Deck Name</Label>
               <Input id="emptyName" value={emptyName} onChange={e => setEmptyName(e.target.value)} placeholder="e.g. Spanish Vocabulary" />
