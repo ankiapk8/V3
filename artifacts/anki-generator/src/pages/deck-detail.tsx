@@ -315,6 +315,15 @@ function StudyMode({ cards, deckId, deckName, onExit, savePoint }: {
                 <span className="h-5 w-5 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">Q</span>
                 Front
               </div>
+              {(current as Card & { image?: string | null })?.image && (
+                <div className="mb-4 rounded-lg overflow-hidden border border-border/40 bg-background">
+                  <img
+                    src={(current as Card & { image?: string | null }).image!}
+                    alt="Card visual"
+                    className="w-full h-auto max-h-72 object-contain"
+                  />
+                </div>
+              )}
               <p className="text-lg sm:text-xl font-medium text-foreground leading-relaxed flex-1">
                 {current?.front}
               </p>
@@ -326,15 +335,6 @@ function StudyMode({ cards, deckId, deckName, onExit, savePoint }: {
                   <span className="h-5 w-5 rounded-full bg-green-500/10 text-green-600 flex items-center justify-center text-[9px] font-bold">A</span>
                   Back
                 </div>
-                {(current as Card & { image?: string | null })?.image && (
-                  <div className="mb-4 rounded-lg overflow-hidden border border-border/40 bg-background">
-                    <img
-                      src={(current as Card & { image?: string | null }).image!}
-                      alt="Card visual"
-                      className="w-full h-auto max-h-64 object-contain"
-                    />
-                  </div>
-                )}
                 <p className="text-base sm:text-lg text-foreground leading-relaxed">
                   {current?.back}
                 </p>
