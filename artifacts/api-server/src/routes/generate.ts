@@ -4,7 +4,7 @@ import { GenerateCardsBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
-const MAX_PAGE_IMAGES = 12;
+const MAX_PAGE_IMAGES = 100;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
