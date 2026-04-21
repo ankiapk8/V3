@@ -14,6 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { UploadCloud, X, CheckCircle2, AlertCircle, Loader2, FileText, Sparkles, FolderOpen, ImageIcon } from "lucide-react";
 import { extractPdf, isPdfFile, isTextFile } from "@/lib/pdf-extraction";
+import { apiUrl } from "@/lib/utils";
 import type { Deck } from "@workspace/api-client-react/src/generated/api.schemas";
 
 function parseProgressPercent(message: string): number | null {

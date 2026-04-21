@@ -6,7 +6,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navLinks = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
-    { href: "/generate", label: "Generate", icon: Sparkles },
+    { href: "/decks?new=1", label: "Generate", icon: Sparkles },
     { href: "/decks", label: "Library", icon: Library },
   ];
 
@@ -20,11 +20,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="flex items-center gap-1">
             {navLinks.map(({ href, label, icon: Icon }) => {
-              const isActive = href === "/"
+              const path = href.split("?")[0];
+              const isActive = path === "/"
                 ? location === "/"
-                : href === "/decks"
+                : path === "/decks"
                 ? location.startsWith("/decks")
-                : location === href;
+                : location === path;
               return (
                 <Link key={href} href={href}>
                   <span

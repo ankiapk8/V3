@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { useListDecks, useDeleteDeck, getListDecksQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
@@ -253,6 +253,16 @@ export default function Decks() {
   const { toast } = useToast();
 
   const [generateSheetOpen, setGenerateSheetOpen] = useState(false);
+  const search_ = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(search_);
+    if (params.get("new") === "1") {
+      setGenerateSheetOpen(true);
+      const url = new URL(window.location.href);
+      url.searchParams.delete("new");
+      window.history.replaceState({}, "", url.pathname + (url.search || ""));
+    }
+  }, [search_]);
   const [deckFormOpen, setDeckFormOpen] = useState(false);
   const [deckFormMode, setDeckFormMode] = useState<DeckFormMode>({ type: "new-topic" });
   const [search, setSearch] = useState("");

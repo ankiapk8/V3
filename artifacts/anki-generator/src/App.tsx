@@ -5,10 +5,10 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Layout } from "@/components/layout";
 
 import Dashboard from "@/pages/dashboard";
-import Home from "@/pages/home";
 import Decks from "@/pages/decks";
 import DeckDetail from "@/pages/deck-detail";
 import NotFound from "@/pages/not-found";
+import { Redirect } from "wouter";
 
 const queryClient = new QueryClient();
 
@@ -17,7 +17,7 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/generate" component={Home} />
+        <Route path="/generate">{() => <Redirect to="/decks?new=1" />}</Route>
         <Route path="/decks" component={Decks} />
         <Route path="/decks/:id" component={DeckDetail} />
         <Route component={NotFound} />
