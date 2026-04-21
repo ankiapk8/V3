@@ -373,40 +373,66 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto">
-        <SheetHeader className="mb-4">
-          <SheetTitle className="font-serif text-2xl">New Deck</SheetTitle>
-          <SheetDescription>Generate AI flashcards from files or create an empty deck.</SheetDescription>
-        </SheetHeader>
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto p-0 bg-gradient-to-b from-background to-muted/20">
+        <div className="px-6 pt-6 pb-4 border-b bg-background/60 backdrop-blur-sm sticky top-0 z-10">
+          <SheetHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center shrink-0">
+                <Sparkles className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <SheetTitle className="font-serif text-2xl leading-tight">New Deck</SheetTitle>
+                <SheetDescription className="text-xs mt-0.5">
+                  Generate AI flashcards or start from scratch.
+                </SheetDescription>
+              </div>
+            </div>
+          </SheetHeader>
+        </div>
 
+        <div className="px-6 py-5">
         <Tabs defaultValue="generate" className="w-full">
-          <TabsList className="w-full mb-5">
-            <TabsTrigger value="generate" className="flex-1 gap-1.5">
+          <TabsList className="w-full mb-6 h-10 p-1 bg-muted/60">
+            <TabsTrigger value="generate" className="flex-1 gap-1.5 h-8 data-[state=active]:shadow-sm">
               <Sparkles className="h-3.5 w-3.5" /> Generate with AI
             </TabsTrigger>
-            <TabsTrigger value="empty" className="flex-1 gap-1.5">
+            <TabsTrigger value="empty" className="flex-1 gap-1.5 h-8 data-[state=active]:shadow-sm">
               <FileText className="h-3.5 w-3.5" /> Empty Deck
             </TabsTrigger>
           </TabsList>
 
           {/* ── Generate tab ── */}
-          <TabsContent value="generate" className="space-y-4 mt-0">
+          <TabsContent value="generate" className="space-y-5 mt-0">
             {parentOptions.length > 0 && (
               <ParentSelector value={parentId} onChange={setParentId} />
             )}
 
             {/* Drop zone */}
             <div
-              className={`border-2 border-dashed rounded-lg p-5 text-center cursor-pointer transition-colors ${isDragging ? "border-primary bg-primary/5" : "border-border hover:border-primary/50 hover:bg-muted/30"}`}
+              className={`relative border-2 border-dashed rounded-xl p-7 text-center cursor-pointer transition-all duration-200 group ${
+                isDragging
+                  ? "border-primary bg-primary/5 scale-[1.01] shadow-sm"
+                  : "border-border/70 hover:border-primary/60 hover:bg-primary/[0.02]"
+              }`}
               onClick={() => fileInputRef.current?.click()}
               onDragOver={e => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               onDrop={handleDrop}
             >
               <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileInput} accept=".txt,.pdf" multiple disabled={isGeneratingAll} />
-              <UploadCloud className="h-7 w-7 mx-auto mb-1.5 text-muted-foreground" />
-              <p className="text-sm font-medium">Drop files or click to browse</p>
-              <p className="text-xs text-muted-foreground mt-0.5">PDF and TXT — multiple files at once</p>
+              <div className={`h-12 w-12 mx-auto mb-3 rounded-full flex items-center justify-center transition-all ${
+                isDragging
+                  ? "bg-primary/15 text-primary"
+                  : "bg-muted text-muted-foreground group-hover:bg-primary/10 group-hover:text-primary"
+              }`}>
+                <UploadCloud className="h-6 w-6" />
+              </div>
+              <p className="text-sm font-semibold text-foreground">
+                {isDragging ? "Release to upload" : "Drop files or click to browse"}
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                PDF and TXT · Upload multiple at once
+              </p>
             </div>
 
             {/* File entries */}
@@ -420,30 +446,43 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
                 extractPhase === "server" ? "Server extraction" :
                 f.progress || "Processing…";
 
+              const accentClass =
+                f.status === "error" ? "border-l-destructive/70"
+                : f.status === "done" ? "border-l-green-500/70"
+                : f.status === "ready" ? "border-l-primary/50"
+                : "border-l-muted-foreground/30";
+
               return (
-              <Card key={f.id} className="border-border/50">
-                <CardContent className="p-3 space-y-2">
-                  <div className="flex items-center gap-2">
-                    {f.status === "extracting" && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
-                    {f.status === "ready"      && <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />}
-                    {f.status === "generating" && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />}
-                    {f.status === "done"       && <Sparkles className="h-4 w-4 shrink-0 text-green-500" />}
-                    {f.status === "error"      && <AlertCircle className="h-4 w-4 shrink-0 text-destructive" />}
+              <Card key={f.id} className={`border-border/60 border-l-[3px] ${accentClass} shadow-sm bg-card/80 backdrop-blur-sm transition-shadow hover:shadow-md`}>
+                <CardContent className="p-3.5 space-y-2.5">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 ${
+                      f.status === "error" ? "bg-destructive/10" :
+                      f.status === "done" ? "bg-green-500/10" :
+                      f.status === "ready" ? "bg-primary/10" :
+                      "bg-muted"
+                    }`}>
+                      {f.status === "extracting" && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                      {f.status === "ready"      && <FileText className="h-3.5 w-3.5 text-primary" />}
+                      {f.status === "generating" && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
+                      {f.status === "done"       && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                      {f.status === "error"      && <AlertCircle className="h-3.5 w-3.5 text-destructive" />}
+                    </div>
                     <span className="text-sm font-medium flex-1 truncate">{f.name}</span>
                     {f.status === "ready"      && (
                       <div className="flex items-center gap-1 shrink-0">
-                        <Badge variant="secondary" className="text-xs">{(f.text.length / 1000).toFixed(1)}k chars</Badge>
+                        <Badge variant="secondary" className="text-[10px] font-normal px-1.5 py-0 h-5">{(f.text.length / 1000).toFixed(1)}k chars</Badge>
                         {f.pageImages.length > 0 && (
-                          <Badge variant="outline" className="text-xs gap-1">
+                          <Badge variant="outline" className="text-[10px] gap-1 px-1.5 py-0 h-5 font-normal">
                             <ImageIcon className="h-2.5 w-2.5" />{f.pageImages.length} pg
                           </Badge>
                         )}
                       </div>
                     )}
-                    {f.status === "generating" && <span className="text-xs text-muted-foreground shrink-0">Generating…</span>}
-                    {f.status === "done"       && <Badge className="text-xs shrink-0 bg-green-500 hover:bg-green-600">{f.generatedCount} cards</Badge>}
-                    {f.status === "error"      && <span className="text-xs text-destructive shrink-0">{f.progress}</span>}
-                    <button onClick={() => setFiles(p => p.filter(x => x.id !== f.id))} className="text-muted-foreground hover:text-foreground ml-1 shrink-0" disabled={isGeneratingAll || f.status === "generating"}>
+                    {f.status === "generating" && <span className="text-xs text-primary font-medium shrink-0">Generating…</span>}
+                    {f.status === "done"       && <Badge className="text-[10px] shrink-0 bg-green-600 hover:bg-green-600 px-1.5 py-0 h-5">{f.generatedCount} cards</Badge>}
+                    {f.status === "error"      && <span className="text-xs text-destructive shrink-0 max-w-[140px] truncate">{f.progress}</span>}
+                    <button onClick={() => setFiles(p => p.filter(x => x.id !== f.id))} className="text-muted-foreground hover:text-foreground ml-0.5 shrink-0 p-0.5 rounded hover:bg-muted transition-colors" disabled={isGeneratingAll || f.status === "generating"}>
                       <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
@@ -519,9 +558,17 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
             })}
 
             {/* Manual text */}
-            <div className="space-y-1.5">
-              <Label className="text-sm text-muted-foreground">Additional text {files.length > 0 && "(optional)"}</Label>
-              <Textarea placeholder="Paste study material here…" className="min-h-[90px] resize-none text-sm" value={manualText} onChange={e => setManualText(e.target.value)} disabled={isGeneratingAll} />
+            <div className="relative pt-1">
+              <div className="absolute inset-x-0 top-0 flex items-center" aria-hidden>
+                <div className="flex-1 h-px bg-border/70" />
+                <span className="px-2 text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+                  {files.length > 0 ? "Or add text" : "Or paste text"}
+                </span>
+                <div className="flex-1 h-px bg-border/70" />
+              </div>
+              <div className="space-y-1.5 pt-5">
+                <Textarea placeholder="Paste study material, notes, or an article here…" className="min-h-[100px] resize-none text-sm bg-background/80" value={manualText} onChange={e => setManualText(e.target.value)} disabled={isGeneratingAll} />
+              </div>
             </div>
             {manualText.trim().length > 0 && (
               <div className="space-y-1.5">
@@ -555,14 +602,31 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
               </div>
             )}
 
-            <Button className="w-full" onClick={handleGenerateAll} disabled={!canGenerate}>
-              {isGeneratingAll
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
-                : isExtracting
-                ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing files…</>
-                : <><Sparkles className="mr-2 h-4 w-4" />{totalTargets > 1 ? `Generate ${totalTargets} Decks` : "Generate Deck"}</>
-              }
-            </Button>
+            <div className="sticky bottom-0 -mx-6 px-6 pt-3 pb-1 bg-gradient-to-t from-background via-background to-background/80 backdrop-blur-sm">
+              {totalTargets > 0 && !isGeneratingAll && !isExtracting && (
+                <div className="flex items-center justify-between mb-2 px-0.5 text-xs">
+                  <span className="text-muted-foreground">
+                    Ready to generate
+                  </span>
+                  <span className="font-medium text-foreground">
+                    {totalTargets} {totalTargets === 1 ? "deck" : "decks"}
+                  </span>
+                </div>
+              )}
+              <Button
+                className="w-full h-11 shadow-sm font-medium"
+                onClick={handleGenerateAll}
+                disabled={!canGenerate}
+                size="lg"
+              >
+                {isGeneratingAll
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Generating…</>
+                  : isExtracting
+                  ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing files…</>
+                  : <><Sparkles className="mr-2 h-4 w-4" />{totalTargets > 1 ? `Generate ${totalTargets} Decks` : "Generate Deck"}</>
+                }
+              </Button>
+            </div>
           </TabsContent>
 
           {/* ── Empty deck tab ── */}
@@ -578,7 +642,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
               <Label htmlFor="emptyDesc">Description <span className="text-muted-foreground">(optional)</span></Label>
               <Textarea id="emptyDesc" value={emptyDesc} onChange={e => setEmptyDesc(e.target.value)} placeholder="What is this deck for?" className="resize-none" rows={3} />
             </div>
-            <Button className="w-full" onClick={handleCreateEmpty} disabled={!emptyName.trim() || isCreating}>
+            <Button className="w-full h-11 shadow-sm font-medium" size="lg" onClick={handleCreateEmpty} disabled={!emptyName.trim() || isCreating}>
               {isCreating
                 ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Creating…</>
                 : <><FileText className="mr-2 h-4 w-4" />Create Empty Deck</>
@@ -586,6 +650,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
             </Button>
           </TabsContent>
         </Tabs>
+        </div>
       </SheetContent>
     </Sheet>
   );
