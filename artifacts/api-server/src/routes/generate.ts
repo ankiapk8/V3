@@ -5,6 +5,9 @@ import { GenerateCardsBody } from "@workspace/api-zod";
 const router: IRouter = Router();
 
 const MAX_PAGE_IMAGES = 100;
+const VISUAL_BATCH_SIZE = 6;
+const MAX_VISUAL_PAGES = 48;
+const VISUAL_CONCURRENCY = 2;
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -41,7 +44,6 @@ async function createChatCompletionWithRetry(
       if (!isRetryableAIError(error) || attempt >= delays.length) {
         throw error;
       }
-
       const delayMs = delays[attempt];
       requestLog.warn({ err: error, attempt: attempt + 1, delayMs }, "Retrying AI card generation");
       await sleep(delayMs);
@@ -49,29 +51,26 @@ async function createChatCompletionWithRetry(
   }
 }
 
-function parseGeneratedCards(rawContent: string): { front: string; back: string; imageIndex?: number | null }[] {
-  const cleaned = rawContent
-    .replace(/```json/gi, "")
-    .replace(/```/g, "")
-    .trim();
+function parseJson<T>(raw: string): T[] {
+  const cleaned = raw.replace(/```json/gi, "").replace(/```/g, "").trim();
   const candidates = [
     cleaned,
     cleaned.match(/\[[\s\S]*\]/)?.[0],
     cleaned.match(/\{[\s\S]*\}/)?.[0],
-  ].filter((value): value is string => Boolean(value));
+  ].filter((v): v is string => Boolean(v));
 
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
-      if (Array.isArray(parsed)) return parsed;
-      if (parsed && typeof parsed === "object" && Array.isArray((parsed as { cards?: unknown }).cards)) {
-        return (parsed as { cards: { front: string; back: string; imageIndex?: number | null }[] }).cards;
+      if (Array.isArray(parsed)) return parsed as T[];
+      if (parsed && typeof parsed === "object") {
+        const arr = (parsed as Record<string, unknown>).cards ?? (parsed as Record<string, unknown>).items;
+        if (Array.isArray(arr)) return arr as T[];
       }
     } catch {
       continue;
     }
   }
-
   return [];
 }
 
@@ -79,9 +78,146 @@ async function getOpenAIClient() {
   if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || !process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
     throw new Error("AI card generation is not configured yet.");
   }
-
   const { openai } = await import("@workspace/integrations-openai-ai-server");
   return openai;
+}
+
+type RawCard = { front: string; back: string };
+type VisualRawCard = { pageIndex: number; front: string; back: string };
+
+async function generateTextCards(
+  openai: Awaited<ReturnType<typeof getOpenAIClient>>,
+  text: string,
+  maxCards: number,
+  requestLog: { warn: (obj: unknown, message: string) => void },
+): Promise<RawCard[]> {
+  const systemPrompt = `You are an expert Anki flashcard creator. Generate high-quality question-answer flashcards from the provided text that test understanding, not just recall.
+
+Rules:
+- Questions should be specific and unambiguous
+- Answers should be concise but complete  
+- Avoid trivial or overly obvious cards
+- Focus on key concepts, definitions, relationships, mechanisms, and important facts
+- Each card should be self-contained (understandable without context)
+- Use simple, clear language
+
+Respond ONLY with a JSON array of objects with "front" (question) and "back" (answer) fields. No markdown, no explanation.`;
+
+  const userContent = `Generate exactly ${maxCards} Anki flashcards from the following text:\n\n${text.slice(0, 20000)}`;
+
+  const response = await createChatCompletionWithRetry(openai, {
+    model: "gpt-4.1-mini",
+    max_completion_tokens: 16384,
+    stream: false as const,
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userContent },
+    ],
+  }, requestLog);
+
+  const raw = (response as { choices: Array<{ message: { content: string | null } }> })
+    .choices[0]?.message?.content ?? "[]";
+  return parseJson<RawCard>(raw);
+}
+
+async function generateVisualCardsForBatch(
+  openai: Awaited<ReturnType<typeof getOpenAIClient>>,
+  batchImages: string[],
+  batchStart: number,
+  requestLog: { warn: (obj: unknown, message: string) => void },
+): Promise<VisualRawCard[]> {
+  type ContentPart =
+    | { type: "text"; text: string }
+    | { type: "image_url"; image_url: { url: string; detail: "high" } };
+
+  const imageUrls: ContentPart[] = batchImages.map(img => ({
+    type: "image_url" as const,
+    image_url: {
+      url: img.startsWith("data:") ? img : `data:image/jpeg;base64,${img}`,
+      detail: "high" as const,
+    },
+  }));
+
+  const systemPrompt = `You are an expert Anki flashcard creator specialised in visual content. You will receive ${batchImages.length} PDF page image(s) (pages ${batchStart + 1}–${batchStart + batchImages.length}).
+
+Your task: for EACH image that contains a meaningful visual element — such as diagrams, anatomical illustrations, X-rays, CT/MRI scans, ECGs, histology slides, dermatology photos, charts, tables, flowcharts, algorithms, graphs, labelled figures, equations — generate 1–3 specific flashcards about that visual.
+
+Rules:
+- Generate cards ONLY for pages with meaningful visuals. Skip plain-text or empty pages entirely.
+- Cards must be specific to what is VISIBLE in the image (not general knowledge).
+- Questions should ask the learner to identify, interpret, label, or explain what is shown.
+- Answers must be concise and accurate.
+
+Return ONLY a JSON array. Each item must have exactly:
+- "pageIndex": integer (0-based index within the images you received, so 0 = first image in this batch)
+- "front": string (question)
+- "back": string (answer)
+
+No markdown, no explanation, just the JSON array.`;
+
+  try {
+    const response = await createChatCompletionWithRetry(openai, {
+      model: "gpt-4.1-mini",
+      max_completion_tokens: 4096,
+      stream: false as const,
+      messages: [
+        { role: "system", content: systemPrompt },
+        {
+          role: "user",
+          content: [
+            { type: "text" as const, text: `Here are the ${batchImages.length} page image(s) for pages ${batchStart + 1}–${batchStart + batchImages.length}. Generate visual flashcards:` },
+            ...imageUrls,
+          ],
+        },
+      ],
+    }, requestLog);
+
+    const raw = (response as { choices: Array<{ message: { content: string | null } }> })
+      .choices[0]?.message?.content ?? "[]";
+    return parseJson<VisualRawCard>(raw).filter(
+      c => typeof c.pageIndex === "number" && typeof c.front === "string" && typeof c.back === "string"
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function generateAllVisualCards(
+  openai: Awaited<ReturnType<typeof getOpenAIClient>>,
+  images: string[],
+  requestLog: { warn: (obj: unknown, message: string) => void },
+): Promise<{ front: string; back: string; image: string }[]> {
+  const pagesToProcess = images.slice(0, MAX_VISUAL_PAGES);
+  const batches: { start: number; imgs: string[] }[] = [];
+
+  for (let i = 0; i < pagesToProcess.length; i += VISUAL_BATCH_SIZE) {
+    batches.push({ start: i, imgs: pagesToProcess.slice(i, i + VISUAL_BATCH_SIZE) });
+  }
+
+  const results: { front: string; back: string; image: string }[] = [];
+
+  for (let i = 0; i < batches.length; i += VISUAL_CONCURRENCY) {
+    const chunk = batches.slice(i, i + VISUAL_CONCURRENCY);
+    const settled = await Promise.allSettled(
+      chunk.map(b => generateVisualCardsForBatch(openai, b.imgs, b.start, requestLog).then(cards =>
+        cards
+          .filter(c => c.pageIndex >= 0 && c.pageIndex < b.imgs.length)
+          .map(c => ({
+            front: c.front.trim(),
+            back: c.back.trim(),
+            image: b.imgs[c.pageIndex],
+          }))
+      ))
+    );
+
+    for (const r of settled) {
+      if (r.status === "fulfilled") results.push(...r.value);
+    }
+
+    if (i + VISUAL_CONCURRENCY < batches.length) await sleep(500);
+  }
+
+  return results;
 }
 
 router.post("/generate", async (req, res, next): Promise<void> => {
@@ -99,96 +235,42 @@ router.post("/generate", async (req, res, next): Promise<void> => {
   }
 
   const maxCards = Math.min(Math.max(cardCount, 1), 200);
+  const selectedImages = Array.isArray(pageImages) && pageImages.length > 0
+    ? pageImages.slice(0, MAX_PAGE_IMAGES)
+    : [];
 
-  const hasImages = Array.isArray(pageImages) && pageImages.length > 0;
-  const selectedImages = hasImages ? pageImages.slice(0, MAX_PAGE_IMAGES) : [];
-
-  const systemPrompt = `You are an expert Anki flashcard creator. Given source material (text and optionally PDF page images), generate high-quality question-answer flashcards that test understanding, not just recall.
-
-Rules:
-- Questions should be specific and unambiguous
-- Answers should be concise but complete
-- Avoid trivial or overly obvious cards
-- Focus on key concepts, definitions, relationships, mechanisms, diagrams, and important facts
-- Each card should be self-contained (understandable without context)
-- Use simple, clear language
-- When the source contains diagrams, tables, charts, or figures, create cards that reference them${hasImages ? `
-
-VISUAL CARDS — ATTACH IMAGES GENEROUSLY:
-- You are also given the rendered page images (in order, 0-based indices). Inspect them carefully.
-- Whenever a page contains a meaningful visual — diagrams, anatomical illustrations, X-rays, CT/MRI scans, ECGs, dermatology photos, microscopy slides, charts, tables, flowcharts, algorithms, decision trees, graphs, equations, labelled figures — CREATE at least one card about that visual and attach it via "imageIndex" (the 0-based index of the page image).
-- Prefer creating image-anchored cards over pure-text cards when a strong visual is present on a page. Visual recall is critical for medical/clinical learning.
-- A card that asks the learner to identify, interpret, or describe a visual MUST have "imageIndex" set.
-- Do NOT attach images to cards that are about plain text on that page (definitions, lists, prose) — only attach when the visual itself is the subject of the question.
-- It is perfectly fine for several cards to share the same imageIndex (e.g. one image → multiple questions about its features).
-- If a page is purely text (no meaningful visual), don't attach its image to any card.` : ""}
-
-Respond with a JSON array of objects with "front" (question), "back" (answer)${hasImages ? ', and optionally "imageIndex" (integer, 0-based, references the page image)' : ""} fields only. No markdown, no explanation, just the JSON array.`;
-
-  const textContent = `Generate exactly ${maxCards} Anki flashcards from the following content. Return only a JSON array:\n\n${text.slice(0, 20000)}`;
-
-  type ContentPart = { type: "text"; text: string } | { type: "image_url"; image_url: { url: string; detail: "high" } };
-  let userMessageContent: string | ContentPart[];
-
-  if (hasImages && selectedImages.length > 0) {
-    const indexedTextContent =
-      textContent +
-      `\n\nPAGE IMAGES PROVIDED (${selectedImages.length} total): they follow this message in order. Image at imageIndex 0 is the first one, imageIndex ${selectedImages.length - 1} is the last.`;
-    userMessageContent = [
-      { type: "text" as const, text: indexedTextContent },
-      ...selectedImages.map((imgData): ContentPart => ({
-        type: "image_url" as const,
-        image_url: {
-          url: imgData.startsWith("data:") ? imgData : `data:image/jpeg;base64,${imgData}`,
-          detail: "high" as const,
-        },
-      })),
-    ];
-  } else {
-    userMessageContent = textContent;
+  let openai: Awaited<ReturnType<typeof getOpenAIClient>>;
+  try {
+    openai = await getOpenAIClient();
+  } catch (error) {
+    req.log.error({ err: error }, "AI card generation failed");
+    res.status(503).json({ error: error instanceof Error ? error.message : "AI card generation failed." });
+    return;
   }
 
-  let response;
+  let textCards: RawCard[] = [];
+  let visualCards: { front: string; back: string; image: string }[] = [];
+
   try {
-    const openai = await getOpenAIClient();
-    response = await createChatCompletionWithRetry(openai, {
-      model: "gpt-4.1-mini",
-      max_completion_tokens: 16384,
-      stream: false as const,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userMessageContent as string },
-      ],
-    }, req.log);
+    [textCards, visualCards] = await Promise.all([
+      generateTextCards(openai, text, maxCards, req.log),
+      selectedImages.length > 0
+        ? generateAllVisualCards(openai, selectedImages, req.log)
+        : Promise.resolve([]),
+    ]);
   } catch (error) {
     req.log.error({ err: error }, "AI card generation failed");
     const status = getErrorStatus(error);
     const code = getErrorCode(error);
     if (status === 429 || code === "too_many_requests") {
-      res.status(429).json({
-        error: "AI is temporarily rate-limited. Wait a minute and try this file again.",
-      });
+      res.status(429).json({ error: "AI is temporarily rate-limited. Wait a minute and try again." });
       return;
     }
-    res.status(503).json({
-      error: error instanceof Error ? error.message : "AI card generation failed.",
-    });
+    res.status(503).json({ error: error instanceof Error ? error.message : "AI card generation failed." });
     return;
   }
 
-  const completion = response as { choices: Array<{ message: { content: string | null } }> };
-  const rawContent = completion.choices[0]?.message?.content ?? "[]";
-
-  let generatedCards: { front: string; back: string; imageIndex?: number | null }[] = [];
-  try {
-    generatedCards = parseGeneratedCards(rawContent);
-  } catch {
-    req.log.error({ rawContent }, "Failed to parse AI response as JSON");
-    res.status(500).json({ error: "Failed to parse AI-generated cards." });
-    return;
-  }
-
-  if (!Array.isArray(generatedCards) || generatedCards.length === 0) {
+  if (textCards.length === 0 && visualCards.length === 0) {
     res.status(500).json({ error: "AI did not generate any cards." });
     return;
   }
@@ -199,30 +281,35 @@ Respond with a JSON array of objects with "front" (question), "back" (answer)${h
       .values({ name: deckName, parentId: parentId ?? null })
       .returning();
 
-    const validCards = generatedCards
-      .filter(c => c && typeof c.front === "string" && typeof c.back === "string")
-      .map(c => {
-        const imageIndex = typeof c.imageIndex === "number" ? c.imageIndex : null;
-        const image = (imageIndex !== null && selectedImages[imageIndex]) ? selectedImages[imageIndex] : null;
-        return {
+    const allCards = [
+      ...textCards
+        .filter(c => typeof c.front === "string" && typeof c.back === "string")
+        .map(c => ({
           deckId: deck.id,
           front: c.front.trim(),
           back: c.back.trim(),
-          image: image ?? null,
-        };
-      })
-      .filter(c => c.front.length > 0 && c.back.length > 0);
+          image: null as string | null,
+        })),
+      ...visualCards
+        .filter(c => c.front.length > 0 && c.back.length > 0)
+        .map(c => ({
+          deckId: deck.id,
+          front: c.front,
+          back: c.back,
+          image: c.image.startsWith("data:") ? c.image : `data:image/jpeg;base64,${c.image}`,
+        })),
+    ].filter(c => c.front.length > 0 && c.back.length > 0);
 
-    if (validCards.length === 0) {
+    if (allCards.length === 0) {
       res.status(500).json({ error: "AI returned cards without usable fronts and backs." });
       return;
     }
 
-    const insertedCards = await db.insert(cardsTable).values(validCards).returning();
+    const insertedCards = await db.insert(cardsTable).values(allCards).returning();
 
     res.status(201).json({
       deck: { ...deck, cardCount: insertedCards.length, createdAt: deck.createdAt.toISOString() },
-      cards: insertedCards.map((c) => ({ ...c, createdAt: c.createdAt.toISOString() })),
+      cards: insertedCards.map(c => ({ ...c, createdAt: c.createdAt.toISOString() })),
       generatedCount: insertedCards.length,
     });
   } catch (err) {
