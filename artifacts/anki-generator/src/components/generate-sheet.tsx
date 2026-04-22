@@ -72,6 +72,7 @@ type FileEntry = {
   generatingPercent?: number;
   generatingMessage?: string;
   generatingStartedAt?: number;
+  customPrompt?: string;
 };
 
 function formatEta(ms: number): string {
@@ -133,6 +134,9 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
   const [manualText, setManualText] = useState("");
   const [manualDeckName, setManualDeckName] = useState("");
   const [manualCardCount, setManualCardCount] = useState<number | "">("");
+  const [manualCustomPrompt, setManualCustomPrompt] = useState("");
+  const [sharedCustomPrompt, setSharedCustomPrompt] = useState("");
+  const [applySharedPrompt, setApplySharedPrompt] = useState(true);
   // Manual text never has page images — deck type is forced to "text"
   const [parentId, setParentId] = useState<string>(defaultParentId?.toString() ?? "none");
 
@@ -243,8 +247,10 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
     fileId?: string,
     deckType: DeckType = "text",
     visualCardCount: number | "" = "",
+    customPrompt?: string,
   ): Promise<number> =>
     new Promise((resolve, reject) => {
+      const trimmedPrompt = (customPrompt ?? "").trim();
       const body = JSON.stringify({
         text, deckName,
         cardCount: cardCount ? Number(cardCount) : undefined,
@@ -252,6 +258,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
         deckType,
         parentId: pid,
         pageImages: pageImages && pageImages.length > 0 ? pageImages : undefined,
+        customPrompt: trimmedPrompt || undefined,
       });
 
       const controller = new AbortController();
@@ -332,9 +339,20 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
     setIsCancelling(false);
     cancelledIdsRef.current.clear();
     let ok = 0, fail = 0, cancelled = 0;
+    const sharedTrim = sharedCustomPrompt.trim();
+    const fileEffectivePrompt = (f: FileEntry) => {
+      const own = (f.customPrompt ?? "").trim();
+      if (own) return own;
+      return applySharedPrompt && sharedTrim ? sharedTrim : "";
+    };
+    const manualEffectivePrompt = () => {
+      const own = manualCustomPrompt.trim();
+      if (own) return own;
+      return applySharedPrompt && sharedTrim ? sharedTrim : "";
+    };
     const targets = [
-      ...readyFiles.map(f => ({ id: f.id, text: f.text, deckName: f.deckName, cardCount: f.cardCount, pageImages: f.pageImages, deckType: f.deckType, visualCardCount: f.visualCardCount })),
-      ...(hasManual ? [{ id: undefined, text: manualText, deckName: manualDeckName, cardCount: manualCardCount, pageImages: [] as string[], deckType: "text" as DeckType, visualCardCount: "" as number | "" }] : []),
+      ...readyFiles.map(f => ({ id: f.id, text: f.text, deckName: f.deckName, cardCount: f.cardCount, pageImages: f.pageImages, deckType: f.deckType, visualCardCount: f.visualCardCount, customPrompt: fileEffectivePrompt(f) })),
+      ...(hasManual ? [{ id: undefined, text: manualText, deckName: manualDeckName, cardCount: manualCardCount, pageImages: [] as string[], deckType: "text" as DeckType, visualCardCount: "" as number | "", customPrompt: manualEffectivePrompt() }] : []),
     ];
 
     for (let i = 0; i < targets.length; i++) {
@@ -355,7 +373,7 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
 
       if (t.id) updateFile(t.id, { status: "generating", progress: "Generating…", generatingPercent: 0, generatingMessage: "Starting…", generatingStartedAt: Date.now() });
       try {
-        const count = await generateOne(t.text, t.deckName, t.cardCount, resolvedParentId, t.pageImages, t.id, t.deckType, t.visualCardCount);
+        const count = await generateOne(t.text, t.deckName, t.cardCount, resolvedParentId, t.pageImages, t.id, t.deckType, t.visualCardCount, t.customPrompt);
         if (t.id) updateFile(t.id, { status: "done", progress: "", generatedCount: count });
         ok++;
       } catch (error) {
@@ -507,6 +525,38 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
           {/* ── Generate tab ── */}
           <TabsContent value="generate" className="space-y-5 mt-0">
             <ParentSelector value={parentId} onChange={setParentId} />
+
+            {/* Shared custom instructions */}
+            <div className="space-y-1.5 rounded-lg border border-border/60 bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Sparkles className="h-3 w-3 text-primary" />
+                  Shared instructions <span className="text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                {sharedCustomPrompt.trim().length > 0 && (
+                  <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={applySharedPrompt}
+                      onChange={e => setApplySharedPrompt(e.target.checked)}
+                      disabled={isGeneratingAll}
+                      className="h-3 w-3 rounded border-border accent-primary"
+                    />
+                    Apply to all
+                  </label>
+                )}
+              </div>
+              <Textarea
+                placeholder={`Tell the AI how to write your cards. e.g. "USMLE Step 1 high-yield style", "rewrite questions as MCQs with 4 options", "answers in Spanish", "focus on mechanism of action and side effects".`}
+                value={sharedCustomPrompt}
+                onChange={e => setSharedCustomPrompt(e.target.value)}
+                className="min-h-[56px] resize-none text-xs leading-snug bg-background/80"
+                disabled={isGeneratingAll}
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Applied to every deck below unless overridden per-file.
+              </p>
+            </div>
 
             {/* Drop zone */}
             <div
@@ -732,6 +782,26 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
                         }
                         return null;
                       })()}
+
+                      <div className="space-y-1">
+                        <Label className="text-xs flex items-center justify-between gap-1">
+                          <span>Custom instructions <span className="text-muted-foreground font-normal">(optional)</span></span>
+                          {!(f.customPrompt ?? "").trim() && applySharedPrompt && sharedCustomPrompt.trim() && (
+                            <span className="text-[10px] text-muted-foreground italic">using shared</span>
+                          )}
+                        </Label>
+                        <Textarea
+                          placeholder={
+                            applySharedPrompt && sharedCustomPrompt.trim() && !(f.customPrompt ?? "").trim()
+                              ? `Override shared: e.g. "make MCQs with 4 options"`
+                              : `e.g. "focus on drug dosages", "Year 1 medical student", "use Spanish on the back"`
+                          }
+                          value={f.customPrompt ?? ""}
+                          onChange={e => updateFile(f.id, { customPrompt: e.target.value })}
+                          className="min-h-[44px] resize-none text-xs leading-snug"
+                          disabled={isGeneratingAll}
+                        />
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -781,6 +851,25 @@ export function GenerateSheet({ open, onOpenChange, onDone, defaultParentId }: G
                   }
                   return null;
                 })()}
+                <div className="space-y-1">
+                  <Label className="text-xs flex items-center justify-between gap-1">
+                    <span>Custom instructions <span className="text-muted-foreground font-normal">(optional)</span></span>
+                    {!manualCustomPrompt.trim() && applySharedPrompt && sharedCustomPrompt.trim() && (
+                      <span className="text-[10px] text-muted-foreground italic">using shared</span>
+                    )}
+                  </Label>
+                  <Textarea
+                    placeholder={
+                      applySharedPrompt && sharedCustomPrompt.trim() && !manualCustomPrompt.trim()
+                        ? `Override shared: e.g. "make MCQs with 4 options"`
+                        : `e.g. "phrase as MCQs", "answers in Spanish", "Year 1 medical student"`
+                    }
+                    value={manualCustomPrompt}
+                    onChange={e => setManualCustomPrompt(e.target.value)}
+                    className="min-h-[44px] resize-none text-xs leading-snug"
+                    disabled={isGeneratingAll}
+                  />
+                </div>
               </div>
             )}
 

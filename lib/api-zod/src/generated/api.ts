@@ -160,6 +160,12 @@ export const GenerateCardsBody = zod.object({
     ),
   parentId: zod.number().nullish(),
   pageImages: zod.array(zod.string()).optional(),
+  customPrompt: zod
+    .string()
+    .optional()
+    .describe(
+      'Optional user instructions appended to the system prompt to steer card generation (e.g. \"focus on dosages\", \"phrase as MCQs\", \"for a Year 1 medical student\")',
+    ),
 });
 
 /**

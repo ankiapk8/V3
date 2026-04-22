@@ -19,4 +19,6 @@ export interface GenerateCardsBody {
   /** @nullable */
   parentId?: number | null;
   pageImages?: string[];
+  /** Optional user instructions appended to the system prompt to steer card generation (e.g. "focus on dosages", "phrase as MCQs", "for a Year 1 medical student") */
+  customPrompt?: string;
 }

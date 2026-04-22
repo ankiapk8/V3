@@ -347,6 +347,9 @@ components:
           type: array
           items:
             type: string
+        customPrompt:
+          type: string
+          description: Optional user instructions appended to the system prompt to steer card generation (e.g. "focus on dosages", "phrase as MCQs", "for a Year 1 medical student")
       required:
         - text
         - deckName

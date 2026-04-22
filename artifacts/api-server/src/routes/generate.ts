@@ -178,12 +178,21 @@ async function downscaleSourcePage(dataUrlOrB64: string): Promise<string> {
   }
 }
 
+function customPromptBlock(customPrompt: string | undefined): string {
+  const trimmed = (customPrompt ?? "").trim();
+  if (!trimmed) return "";
+  // Cap to keep total prompt reasonable
+  const capped = trimmed.length > 1500 ? trimmed.slice(0, 1500) + "…" : trimmed;
+  return `\n\nADDITIONAL USER INSTRUCTIONS (these override the defaults above when they conflict, except for the JSON output format which is mandatory):\n"""\n${capped}\n"""`;
+}
+
 async function generateTextCards(
   openai: Awaited<ReturnType<typeof getOpenAIClient>>,
   text: string,
   maxCards: number,
   requestLog: { warn: (obj: unknown, message: string) => void },
   signal?: AbortSignal,
+  customPrompt?: string,
 ): Promise<RawCard[]> {
   const systemPrompt = `You are an expert Anki flashcard creator. Generate high-quality question-answer flashcards from the provided text that test understanding, not just recall.
 
@@ -195,7 +204,7 @@ Rules:
 - Each card should be self-contained (understandable without context)
 - Use simple, clear language
 
-Respond ONLY with a JSON array of objects with "front" (question) and "back" (answer) fields. No markdown, no explanation.`;
+Respond ONLY with a JSON array of objects with "front" (question) and "back" (answer) fields. No markdown, no explanation.${customPromptBlock(customPrompt)}`;
 
   const userContent = `Generate exactly ${maxCards} Anki flashcards from the following text:\n\n${text.slice(0, 20000)}`;
 
@@ -221,6 +230,7 @@ async function generateVisualCardsForBatch(
   cardsPerPage: number,
   requestLog: { warn: (obj: unknown, message: string) => void },
   signal?: AbortSignal,
+  customPrompt?: string,
 ): Promise<VisualRawCard[]> {
   type ContentPart =
     | { type: "text"; text: string }
@@ -254,7 +264,7 @@ Return ONLY a JSON array. Each item must have exactly:
 - "back": string (answer)
 - "bbox": object with numeric "x", "y", "w", "h" all between 0 and 1. The crop MUST fully contain every important detail of the visual: the entire figure, ALL labels/arrows/legends/axes/captions/scale bars/colour keys, and any text directly describing it. When in doubt, make the box LARGER rather than smaller — prefer a generous box (~5–10% padding around the figure) over a tight one that risks clipping labels or annotations. Never cut through text, arrows, or anatomical structures. If the entire page is the visual, use {"x":0,"y":0,"w":1,"h":1}.
 
-No markdown, no explanation, just the JSON array.`;
+No markdown, no explanation, just the JSON array.${customPromptBlock(customPrompt)}`;
 
   try {
     const response = await createChatCompletionWithRetry(openai, {
@@ -291,6 +301,7 @@ async function generateAllVisualCards(
   requestLog: { warn: (obj: unknown, message: string) => void },
   onBatchGroupDone?: (doneBatches: number, totalBatches: number) => void,
   signal?: AbortSignal,
+  customPrompt?: string,
 ): Promise<VisualCardResult[]> {
   const pagesToProcess = images.slice(0, MAX_VISUAL_PAGES);
   const batches: { start: number; imgs: string[] }[] = [];
@@ -311,7 +322,7 @@ async function generateAllVisualCards(
     if (signal?.aborted) throw new Error("Cancelled");
     const chunk = batches.slice(i, i + VISUAL_CONCURRENCY);
     const settled = await Promise.allSettled(
-      chunk.map(b => generateVisualCardsForBatch(openai, b.imgs, b.start, cardsPerPage, requestLog, signal).then(async cards => {
+      chunk.map(b => generateVisualCardsForBatch(openai, b.imgs, b.start, cardsPerPage, requestLog, signal, customPrompt).then(async cards => {
         const out: VisualCardResult[] = [];
         const thumbCache = new Map<number, string>();
         for (const c of cards) {
@@ -370,7 +381,7 @@ router.post("/generate/stream", async (req, res, next): Promise<void> => {
     return;
   }
 
-  const { text, deckName, cardCount = 20, visualCardCount, parentId, pageImages, deckType: rawDeckType } = parsed.data;
+  const { text, deckName, cardCount = 20, visualCardCount, parentId, pageImages, deckType: rawDeckType, customPrompt } = parsed.data;
 
   if (!text || text.trim().length < 10) {
     res.status(400).json({ error: "Text is too short to generate cards from." });
@@ -423,7 +434,7 @@ router.post("/generate/stream", async (req, res, next): Promise<void> => {
 
   try {
     const textPromise = wantText
-      ? generateTextCards(openai, text, maxTextCards, req.log, signal).then(cards => {
+      ? generateTextCards(openai, text, maxTextCards, req.log, signal, customPrompt).then(cards => {
           textCards = cards;
           sseEmit(res, { type: "progress", percent: TEXT_DONE_PERCENT, message: `Text cards done (${cards.length} generated)` });
         })
@@ -435,7 +446,7 @@ router.post("/generate/stream", async (req, res, next): Promise<void> => {
           const pct = Math.round(VISUAL_START + frac * (VISUAL_END - VISUAL_START));
           const pages = Math.min(done * VISUAL_BATCH_SIZE, selectedImages.length);
           sseEmit(res, { type: "progress", percent: pct, message: `Analyzing & cropping images… (${pages}/${selectedImages.length} pages)` });
-        }, signal).then(cards => { visualCards = cards; })
+        }, signal, customPrompt).then(cards => { visualCards = cards; })
       : Promise.resolve();
 
     await Promise.all([textPromise, visualPromise]);
@@ -551,7 +562,7 @@ router.post("/generate", async (req, res, next): Promise<void> => {
     return;
   }
 
-  const { text, deckName, cardCount = 20, visualCardCount, parentId, pageImages, deckType: rawDeckType } = parsed.data;
+  const { text, deckName, cardCount = 20, visualCardCount, parentId, pageImages, deckType: rawDeckType, customPrompt } = parsed.data;
 
   if (!text || text.trim().length < 10) {
     res.status(400).json({ error: "Text is too short to generate cards from." });
@@ -582,8 +593,8 @@ router.post("/generate", async (req, res, next): Promise<void> => {
 
   try {
     [textCards, visualCards] = await Promise.all([
-      wantText ? generateTextCards(openai, text, maxTextCards, req.log) : Promise.resolve([] as RawCard[]),
-      wantVisual ? generateAllVisualCards(openai, selectedImages, maxVisualCards, req.log) : Promise.resolve([]),
+      wantText ? generateTextCards(openai, text, maxTextCards, req.log, undefined, customPrompt) : Promise.resolve([] as RawCard[]),
+      wantVisual ? generateAllVisualCards(openai, selectedImages, maxVisualCards, req.log, undefined, undefined, customPrompt) : Promise.resolve([]),
     ]);
   } catch (error) {
     req.log.error({ err: error }, "AI card generation failed");
