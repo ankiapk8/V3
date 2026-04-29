@@ -1,0 +1,51 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "install",
+      "type": "shell",
+      "command": "pnpm install",
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: api",
+      "type": "shell",
+      "command": "pnpm --filter @workspace/api-server run dev",
+      "options": {
+        "env": {
+          "PORT": "8080",
+          "DATABASE_URL": "${env:DATABASE_URL}",
+          "AI_INTEGRATIONS_OPENAI_BASE_URL": "${env:AI_INTEGRATIONS_OPENAI_BASE_URL}",
+          "AI_INTEGRATIONS_OPENAI_API_KEY": "${env:AI_INTEGRATIONS_OPENAI_API_KEY}"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: web",
+      "type": "shell",
+      "command": "pnpm --filter @workspace/anki-generator run dev",
+      "options": {
+        "env": {
+          "PORT": "5000",
+          "BASE_PATH": "/"
+        }
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: all (docker)",
+      "type": "shell",
+      "command": "docker compose up --build",
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: down",
+      "type": "shell",
+      "command": "docker compose down",
+      "problemMatcher": []
+    }
+  ]
+}
