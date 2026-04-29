@@ -62,4 +62,17 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - Export uses Anki's `::` convention: sub-deck cards are tagged `Parent::Child`
 - Deleting a parent nullifies `parentId` on children (they become standalone)
 
+## Local development with Docker / VS Code
+
+The project ships with a Docker setup so it can be cloned, opened in VS Code, and run on `localhost` without Replit:
+
+- `docker-compose.yml` (root) — `postgres` + `api` + `web` (nginx). Web is exposed on host port `5000`, API on `8080`.
+- `artifacts/api-server/Dockerfile` — multi-stage build using pnpm; copies the whole workspace into the runner so esbuild externals (`canvas`, `tesseract.js`, `pdfjs-dist`, `pino`) resolve.
+- `artifacts/anki-generator/Dockerfile` — multi-stage Vite build, served by nginx with `/api` proxied to the `api` service. Built with `BASE_PATH=/`.
+- `artifacts/anki-generator/nginx.conf` — SPA fallback + `/api` reverse proxy with 600s timeouts and 200MB body limit for large PDF uploads.
+- `.env.example` — copy to `.env`; supports either `https://api.openai.com/v1` with a user-provided OpenAI key, or Replit-provisioned values.
+- `.dockerignore` excludes `node_modules`, `dist`, `.local`, `.replit`, etc. Build context is the monorepo root.
+- `.vscode/tasks.json` and `.vscode/launch.json` — VS Code tasks (`dev: api`, `dev: web`, `dev: all (docker)`) and a Node debug launch config.
+- `DOCKER.md` — user-facing quickstart for the three run modes (Compose, VS Code + Docker, native pnpm).
+
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
