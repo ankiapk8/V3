@@ -85,5 +85,6 @@ The project also ships ready for one-click Blueprint deploys on Render.com:
 - API CORS now reads `CORS_ORIGIN` (comma-separated allow-list); when unset, behaves as before (`origin: true`, allow all). Render setup pins it to the static site's URL.
 - Secrets (`AI_INTEGRATIONS_OPENAI_API_KEY`, `CORS_ORIGIN`, `VITE_API_BASE_URL`) are marked `sync: false` in `render.yaml` so Render prompts for them on first deploy.
 - `RENDER.md` — user-facing quickstart for connecting the repo on Render and filling in secrets.
+- Root-level `Dockerfile` (mirrors `artifacts/api-server/Dockerfile`) so a manually-created Render Web Service (or any other PaaS that defaults to `./Dockerfile`) builds the API without extra configuration.
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
