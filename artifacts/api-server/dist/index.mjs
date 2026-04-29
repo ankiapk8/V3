@@ -20488,27 +20488,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router11;
+    module.exports = Router12;
     module.exports.Route = Route;
-    function Router11(options) {
-      if (!(this instanceof Router11)) {
-        return new Router11(options);
+    function Router12(options) {
+      if (!(this instanceof Router12)) {
+        return new Router12(options);
       }
       const opts = options || {};
-      function router11(req, res, next) {
-        router11.handle(req, res, next);
+      function router12(req, res, next) {
+        router12.handle(req, res, next);
       }
-      Object.setPrototypeOf(router11, this);
-      router11.caseSensitive = opts.caseSensitive;
-      router11.mergeParams = opts.mergeParams;
-      router11.params = {};
-      router11.strict = opts.strict;
-      router11.stack = [];
-      return router11;
+      Object.setPrototypeOf(router12, this);
+      router12.caseSensitive = opts.caseSensitive;
+      router12.mergeParams = opts.mergeParams;
+      router12.params = {};
+      router12.strict = opts.strict;
+      router12.stack = [];
+      return router12;
     }
-    Router11.prototype = function() {
+    Router12.prototype = function() {
     };
-    Router11.prototype.param = function param(name, fn) {
+    Router12.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20528,7 +20528,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router11.prototype.handle = function handle(req, res, callback) {
+    Router12.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20655,7 +20655,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router11.prototype.use = function use(handler) {
+    Router12.prototype.use = function use(handler) {
       let offset = 0;
       let path2 = "/";
       if (typeof handler !== "function") {
@@ -20688,7 +20688,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router11.prototype.route = function route(path2) {
+    Router12.prototype.route = function route(path2) {
       const route2 = new Route(path2);
       const layer = new Layer(path2, {
         sensitive: this.caseSensitive,
@@ -20703,7 +20703,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router11.prototype[method] = function(path2) {
+      Router12.prototype[method] = function(path2) {
         const route = this.route(path2);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -20886,13 +20886,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router11 = require_router();
+    var Router12 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router11 = null;
+      var router12 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -20901,13 +20901,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router11 === null) {
-            router11 = new Router11({
+          if (router12 === null) {
+            router12 = new Router12({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router11;
+          return router12;
         }
       });
     };
@@ -20978,15 +20978,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router11 = this.router;
+      var router12 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router11.use(path2, fn2);
+          return router12.use(path2, fn2);
         }
         debug(".use app under %s", path2);
         fn2.mountpath = path2;
         fn2.parent = this;
-        router11.use(path2, function mounted_app(req, res, next) {
+        router12.use(path2, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23513,7 +23513,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router11 = require_router();
+    var Router12 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23535,8 +23535,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router11.Route;
-    exports.Router = Router11;
+    exports.Route = Router12.Route;
+    exports.Router = Router12;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -58624,12 +58624,12 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express11 = __toESM(require_express2(), 1);
+var import_express12 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 
 // src/routes/index.ts
-var import_express10 = __toESM(require_express2(), 1);
+var import_express11 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -62661,8 +62661,23 @@ router.get("/healthz", (_req, res) => {
 });
 var health_default = router;
 
-// src/routes/decks.ts
+// src/routes/config.ts
 var import_express2 = __toESM(require_express2(), 1);
+
+// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/esm/index.mjs
+var import_lib = __toESM(require_lib5(), 1);
+var Client = import_lib.default.Client;
+var Pool = import_lib.default.Pool;
+var Connection = import_lib.default.Connection;
+var types = import_lib.default.types;
+var Query = import_lib.default.Query;
+var DatabaseError = import_lib.default.DatabaseError;
+var escapeIdentifier = import_lib.default.escapeIdentifier;
+var escapeLiteral = import_lib.default.escapeLiteral;
+var Result = import_lib.default.Result;
+var TypeOverrides = import_lib.default.TypeOverrides;
+var defaults = import_lib.default.defaults;
+var esm_default = import_lib.default;
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/entity.js
 var entityKind = /* @__PURE__ */ Symbol.for("drizzle:entityKind");
@@ -62689,6 +62704,61 @@ function is(value, type) {
   }
   return false;
 }
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/logger.js
+var ConsoleLogWriter = class {
+  static [entityKind] = "ConsoleLogWriter";
+  write(message) {
+    console.log(message);
+  }
+};
+var DefaultLogger = class {
+  static [entityKind] = "DefaultLogger";
+  writer;
+  constructor(config2) {
+    this.writer = config2?.writer ?? new ConsoleLogWriter();
+  }
+  logQuery(query, params) {
+    const stringifiedParams = params.map((p) => {
+      try {
+        return JSON.stringify(p);
+      } catch {
+        return String(p);
+      }
+    });
+    const paramsStr = stringifiedParams.length ? ` -- params: [${stringifiedParams.join(", ")}]` : "";
+    this.writer.write(`Query: ${query}${paramsStr}`);
+  }
+};
+var NoopLogger = class {
+  static [entityKind] = "NoopLogger";
+  logQuery() {
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/query-promise.js
+var QueryPromise = class {
+  static [entityKind] = "QueryPromise";
+  [Symbol.toStringTag] = "QueryPromise";
+  catch(onRejected) {
+    return this.then(void 0, onRejected);
+  }
+  finally(onFinally) {
+    return this.then(
+      (value) => {
+        onFinally?.();
+        return value;
+      },
+      (reason) => {
+        onFinally?.();
+        throw reason;
+      }
+    );
+  }
+  then(onFulfilled, onRejected) {
+    return this.execute().then(onFulfilled, onRejected);
+  }
+};
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/column.js
 var Column = class {
@@ -63897,85 +63967,71 @@ function mapColumnsInSQLToAlias(query, alias) {
   }));
 }
 
-// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/errors.js
-var DrizzleError = class extends Error {
-  static [entityKind] = "DrizzleError";
-  constructor({ message, cause }) {
-    super(message);
-    this.name = "DrizzleError";
-    this.cause = cause;
-  }
-};
-var DrizzleQueryError = class _DrizzleQueryError extends Error {
-  constructor(query, params, cause) {
-    super(`Failed query: ${query}
-params: ${params}`);
-    this.query = query;
-    this.params = params;
-    this.cause = cause;
-    Error.captureStackTrace(this, _DrizzleQueryError);
-    if (cause) this.cause = cause;
-  }
-};
-var TransactionRollbackError = class extends DrizzleError {
-  static [entityKind] = "TransactionRollbackError";
-  constructor() {
-    super({ message: "Rollback" });
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/logger.js
-var ConsoleLogWriter = class {
-  static [entityKind] = "ConsoleLogWriter";
-  write(message) {
-    console.log(message);
-  }
-};
-var DefaultLogger = class {
-  static [entityKind] = "DefaultLogger";
-  writer;
+// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/selection-proxy.js
+var SelectionProxyHandler = class _SelectionProxyHandler {
+  static [entityKind] = "SelectionProxyHandler";
+  config;
   constructor(config2) {
-    this.writer = config2?.writer ?? new ConsoleLogWriter();
+    this.config = { ...config2 };
   }
-  logQuery(query, params) {
-    const stringifiedParams = params.map((p) => {
-      try {
-        return JSON.stringify(p);
-      } catch {
-        return String(p);
+  get(subquery, prop) {
+    if (prop === "_") {
+      return {
+        ...subquery["_"],
+        selectedFields: new Proxy(
+          subquery._.selectedFields,
+          this
+        )
+      };
+    }
+    if (prop === ViewBaseConfig) {
+      return {
+        ...subquery[ViewBaseConfig],
+        selectedFields: new Proxy(
+          subquery[ViewBaseConfig].selectedFields,
+          this
+        )
+      };
+    }
+    if (typeof prop === "symbol") {
+      return subquery[prop];
+    }
+    const columns = is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery;
+    const value = columns[prop];
+    if (is(value, SQL.Aliased)) {
+      if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) {
+        return value.sql;
       }
-    });
-    const paramsStr = stringifiedParams.length ? ` -- params: [${stringifiedParams.join(", ")}]` : "";
-    this.writer.write(`Query: ${query}${paramsStr}`);
-  }
-};
-var NoopLogger = class {
-  static [entityKind] = "NoopLogger";
-  logQuery() {
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/query-promise.js
-var QueryPromise = class {
-  static [entityKind] = "QueryPromise";
-  [Symbol.toStringTag] = "QueryPromise";
-  catch(onRejected) {
-    return this.then(void 0, onRejected);
-  }
-  finally(onFinally) {
-    return this.then(
-      (value) => {
-        onFinally?.();
+      const newValue = value.clone();
+      newValue.isSelectionField = true;
+      return newValue;
+    }
+    if (is(value, SQL)) {
+      if (this.config.sqlBehavior === "sql") {
         return value;
-      },
-      (reason) => {
-        onFinally?.();
-        throw reason;
       }
-    );
-  }
-  then(onFulfilled, onRejected) {
-    return this.execute().then(onFulfilled, onRejected);
+      throw new Error(
+        `You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`
+      );
+    }
+    if (is(value, Column)) {
+      if (this.config.alias) {
+        return new Proxy(
+          value,
+          new ColumnAliasProxyHandler(
+            new Proxy(
+              value.table,
+              new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false)
+            )
+          )
+        );
+      }
+      return value;
+    }
+    if (typeof value !== "object" || value === null) {
+      return value;
+    }
+    return new Proxy(value, new _SelectionProxyHandler(this.config));
   }
 };
 
@@ -65575,6 +65631,85 @@ var PrimaryKey = class {
   }
 };
 
+// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/casing.js
+function toSnakeCase(input) {
+  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
+  return words.map((word) => word.toLowerCase()).join("_");
+}
+function toCamelCase(input) {
+  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
+  return words.reduce((acc, word, i) => {
+    const formattedWord = i === 0 ? word.toLowerCase() : `${word[0].toUpperCase()}${word.slice(1)}`;
+    return acc + formattedWord;
+  }, "");
+}
+function noopCase(input) {
+  return input;
+}
+var CasingCache = class {
+  static [entityKind] = "CasingCache";
+  /** @internal */
+  cache = {};
+  cachedTables = {};
+  convert;
+  constructor(casing) {
+    this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
+  }
+  getColumnCasing(column) {
+    if (!column.keyAsName) return column.name;
+    const schema = column.table[Table.Symbol.Schema] ?? "public";
+    const tableName = column.table[Table.Symbol.OriginalName];
+    const key = `${schema}.${tableName}.${column.name}`;
+    if (!this.cache[key]) {
+      this.cacheTable(column.table);
+    }
+    return this.cache[key];
+  }
+  cacheTable(table) {
+    const schema = table[Table.Symbol.Schema] ?? "public";
+    const tableName = table[Table.Symbol.OriginalName];
+    const tableKey = `${schema}.${tableName}`;
+    if (!this.cachedTables[tableKey]) {
+      for (const column of Object.values(table[Table.Symbol.Columns])) {
+        const columnKey = `${tableKey}.${column.name}`;
+        this.cache[columnKey] = this.convert(column.name);
+      }
+      this.cachedTables[tableKey] = true;
+    }
+  }
+  clearCache() {
+    this.cache = {};
+    this.cachedTables = {};
+  }
+};
+
+// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/errors.js
+var DrizzleError = class extends Error {
+  static [entityKind] = "DrizzleError";
+  constructor({ message, cause }) {
+    super(message);
+    this.name = "DrizzleError";
+    this.cause = cause;
+  }
+};
+var DrizzleQueryError = class _DrizzleQueryError extends Error {
+  constructor(query, params, cause) {
+    super(`Failed query: ${query}
+params: ${params}`);
+    this.query = query;
+    this.params = params;
+    this.cause = cause;
+    Error.captureStackTrace(this, _DrizzleQueryError);
+    if (cause) this.cause = cause;
+  }
+};
+var TransactionRollbackError = class extends DrizzleError {
+  static [entityKind] = "TransactionRollbackError";
+  constructor() {
+    super({ message: "Rollback" });
+  }
+};
+
 // ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/sql/expressions/conditions.js
 function bindIfParam(value, column) {
   if (isDriverValueEncoder(column) && !isSQLWrapper(value) && !is(value, Param) && !is(value, Placeholder) && !is(value, Column) && !is(value, Table) && !is(value, View)) {
@@ -65958,141 +66093,6 @@ function mapRelationalRow(tablesConfig, tableConfig, row, buildQueryResultSelect
   }
   return result;
 }
-
-// ../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/esm/index.mjs
-var import_lib = __toESM(require_lib5(), 1);
-var Client = import_lib.default.Client;
-var Pool = import_lib.default.Pool;
-var Connection = import_lib.default.Connection;
-var types = import_lib.default.types;
-var Query = import_lib.default.Query;
-var DatabaseError = import_lib.default.DatabaseError;
-var escapeIdentifier = import_lib.default.escapeIdentifier;
-var escapeLiteral = import_lib.default.escapeLiteral;
-var Result = import_lib.default.Result;
-var TypeOverrides = import_lib.default.TypeOverrides;
-var defaults = import_lib.default.defaults;
-var esm_default = import_lib.default;
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/selection-proxy.js
-var SelectionProxyHandler = class _SelectionProxyHandler {
-  static [entityKind] = "SelectionProxyHandler";
-  config;
-  constructor(config2) {
-    this.config = { ...config2 };
-  }
-  get(subquery, prop) {
-    if (prop === "_") {
-      return {
-        ...subquery["_"],
-        selectedFields: new Proxy(
-          subquery._.selectedFields,
-          this
-        )
-      };
-    }
-    if (prop === ViewBaseConfig) {
-      return {
-        ...subquery[ViewBaseConfig],
-        selectedFields: new Proxy(
-          subquery[ViewBaseConfig].selectedFields,
-          this
-        )
-      };
-    }
-    if (typeof prop === "symbol") {
-      return subquery[prop];
-    }
-    const columns = is(subquery, Subquery) ? subquery._.selectedFields : is(subquery, View) ? subquery[ViewBaseConfig].selectedFields : subquery;
-    const value = columns[prop];
-    if (is(value, SQL.Aliased)) {
-      if (this.config.sqlAliasedBehavior === "sql" && !value.isSelectionField) {
-        return value.sql;
-      }
-      const newValue = value.clone();
-      newValue.isSelectionField = true;
-      return newValue;
-    }
-    if (is(value, SQL)) {
-      if (this.config.sqlBehavior === "sql") {
-        return value;
-      }
-      throw new Error(
-        `You tried to reference "${prop}" field from a subquery, which is a raw SQL field, but it doesn't have an alias declared. Please add an alias to the field using ".as('alias')" method.`
-      );
-    }
-    if (is(value, Column)) {
-      if (this.config.alias) {
-        return new Proxy(
-          value,
-          new ColumnAliasProxyHandler(
-            new Proxy(
-              value.table,
-              new TableAliasProxyHandler(this.config.alias, this.config.replaceOriginalName ?? false)
-            )
-          )
-        );
-      }
-      return value;
-    }
-    if (typeof value !== "object" || value === null) {
-      return value;
-    }
-    return new Proxy(value, new _SelectionProxyHandler(this.config));
-  }
-};
-
-// ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/casing.js
-function toSnakeCase(input) {
-  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-  return words.map((word) => word.toLowerCase()).join("_");
-}
-function toCamelCase(input) {
-  const words = input.replace(/['\u2019]/g, "").match(/[\da-z]+|[A-Z]+(?![a-z])|[A-Z][\da-z]+/g) ?? [];
-  return words.reduce((acc, word, i) => {
-    const formattedWord = i === 0 ? word.toLowerCase() : `${word[0].toUpperCase()}${word.slice(1)}`;
-    return acc + formattedWord;
-  }, "");
-}
-function noopCase(input) {
-  return input;
-}
-var CasingCache = class {
-  static [entityKind] = "CasingCache";
-  /** @internal */
-  cache = {};
-  cachedTables = {};
-  convert;
-  constructor(casing) {
-    this.convert = casing === "snake_case" ? toSnakeCase : casing === "camelCase" ? toCamelCase : noopCase;
-  }
-  getColumnCasing(column) {
-    if (!column.keyAsName) return column.name;
-    const schema = column.table[Table.Symbol.Schema] ?? "public";
-    const tableName = column.table[Table.Symbol.OriginalName];
-    const key = `${schema}.${tableName}.${column.name}`;
-    if (!this.cache[key]) {
-      this.cacheTable(column.table);
-    }
-    return this.cache[key];
-  }
-  cacheTable(table) {
-    const schema = table[Table.Symbol.Schema] ?? "public";
-    const tableName = table[Table.Symbol.OriginalName];
-    const tableKey = `${schema}.${tableName}`;
-    if (!this.cachedTables[tableKey]) {
-      for (const column of Object.values(table[Table.Symbol.Columns])) {
-        const columnKey = `${tableKey}.${column.name}`;
-        this.cache[columnKey] = this.convert(column.name);
-      }
-      this.cachedTables[tableKey] = true;
-    }
-  }
-  clearCache() {
-    this.cache = {};
-    this.cachedTables = {};
-  }
-};
 
 // ../../node_modules/.pnpm/drizzle-orm@0.45.1_@types+pg@8.18.0_pg@8.20.0/node_modules/drizzle-orm/pg-core/view-base.js
 var PgViewBase = class extends View {
@@ -81148,9 +81148,69 @@ async function ensureDatabaseSchema() {
   `);
 }
 
-// src/routes/decks.ts
+// src/routes/config.ts
 var router2 = (0, import_express2.Router)();
-router2.get("/decks", async (_req, res, next) => {
+async function checkDatabase() {
+  if (!process.env["DATABASE_URL"]) {
+    return { status: "missing", detail: "DATABASE_URL env var is not set" };
+  }
+  try {
+    const result = await pool.query("SELECT 1 AS ok");
+    if (result.rows[0]?.ok === 1) {
+      return { status: "ok" };
+    }
+    return { status: "error", detail: "Unexpected query result" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { status: "error", detail: message };
+  }
+}
+function checkOpenAI() {
+  const baseUrl = process.env["AI_INTEGRATIONS_OPENAI_BASE_URL"];
+  const apiKey = process.env["AI_INTEGRATIONS_OPENAI_API_KEY"];
+  const missing = [];
+  if (!baseUrl) missing.push("AI_INTEGRATIONS_OPENAI_BASE_URL");
+  if (!apiKey) missing.push("AI_INTEGRATIONS_OPENAI_API_KEY");
+  if (missing.length > 0) {
+    return { status: "missing", detail: `Not set: ${missing.join(", ")}` };
+  }
+  return { status: "ok", detail: `baseUrl: ${baseUrl}` };
+}
+function checkCors() {
+  const origin = process.env["CORS_ORIGIN"];
+  if (!origin) {
+    return {
+      status: "missing",
+      detail: "CORS_ORIGIN unset \u2014 allowing all origins (dev mode)"
+    };
+  }
+  return { status: "ok", detail: origin };
+}
+router2.get("/config", async (_req, res) => {
+  const [database, openai3, cors2] = await Promise.all([
+    checkDatabase(),
+    Promise.resolve(checkOpenAI()),
+    Promise.resolve(checkCors())
+  ]);
+  const allOk = database.status === "ok" && openai3.status === "ok";
+  res.status(allOk ? 200 : 503).json({
+    status: allOk ? "ready" : "degraded",
+    nodeEnv: process.env["NODE_ENV"] ?? "unknown",
+    nodeVersion: process.version,
+    port: process.env["PORT"] ?? "unset",
+    integrations: {
+      database,
+      openai: openai3,
+      cors: cors2
+    }
+  });
+});
+var config_default = router2;
+
+// src/routes/decks.ts
+var import_express3 = __toESM(require_express2(), 1);
+var router3 = (0, import_express3.Router)();
+router3.get("/decks", async (_req, res, next) => {
   try {
     const decks = await db.select({
       id: decksTable.id,
@@ -81165,7 +81225,7 @@ router2.get("/decks", async (_req, res, next) => {
     next(err);
   }
 });
-router2.post("/decks", async (req, res, next) => {
+router3.post("/decks", async (req, res, next) => {
   const parsed = CreateDeckBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -81182,7 +81242,7 @@ router2.post("/decks", async (req, res, next) => {
     next(err);
   }
 });
-router2.get("/decks/:id", async (req, res, next) => {
+router3.get("/decks/:id", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = GetDeckParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -81219,7 +81279,7 @@ router2.get("/decks/:id", async (req, res, next) => {
     next(err);
   }
 });
-router2.patch("/decks/:id", async (req, res, next) => {
+router3.patch("/decks/:id", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
@@ -81260,7 +81320,7 @@ router2.patch("/decks/:id", async (req, res, next) => {
     next(err);
   }
 });
-router2.post("/decks/merge", async (req, res, next) => {
+router3.post("/decks/merge", async (req, res, next) => {
   const body = req.body;
   const deckIds = Array.isArray(body.deckIds) ? body.deckIds.map((v) => Number(v)).filter((n) => Number.isInteger(n) && n > 0) : [];
   const newDeckName = typeof body.newDeckName === "string" ? body.newDeckName.trim() : "";
@@ -81335,7 +81395,7 @@ router2.post("/decks/merge", async (req, res, next) => {
     next(err);
   }
 });
-router2.delete("/decks/:id", async (req, res, next) => {
+router3.delete("/decks/:id", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = DeleteDeckParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -81360,7 +81420,7 @@ router2.delete("/decks/:id", async (req, res, next) => {
     next(err);
   }
 });
-router2.get("/decks/:id/cards", async (req, res, next) => {
+router3.get("/decks/:id/cards", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = ListDeckCardsParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -81383,7 +81443,7 @@ router2.get("/decks/:id/cards", async (req, res, next) => {
     next(err);
   }
 });
-router2.get("/decks/:id/export", async (req, res, next) => {
+router3.get("/decks/:id/export", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = ExportDeckParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -81408,12 +81468,12 @@ router2.get("/decks/:id/export", async (req, res, next) => {
     next(err);
   }
 });
-var decks_default = router2;
+var decks_default = router3;
 
 // src/routes/cards.ts
-var import_express3 = __toESM(require_express2(), 1);
-var router3 = (0, import_express3.Router)();
-router3.patch("/cards/:id", async (req, res, next) => {
+var import_express4 = __toESM(require_express2(), 1);
+var router4 = (0, import_express4.Router)();
+router4.patch("/cards/:id", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = UpdateCardParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -81436,7 +81496,7 @@ router3.patch("/cards/:id", async (req, res, next) => {
     next(err);
   }
 });
-router3.delete("/cards/:id", async (req, res, next) => {
+router4.delete("/cards/:id", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const params = DeleteCardParams.safeParse({ id: parseInt(raw, 10) });
   if (!params.success) {
@@ -81454,12 +81514,12 @@ router3.delete("/cards/:id", async (req, res, next) => {
     next(err);
   }
 });
-var cards_default = router3;
+var cards_default = router4;
 
 // src/routes/generate.ts
-var import_express4 = __toESM(require_express2(), 1);
+var import_express5 = __toESM(require_express2(), 1);
 import { createCanvas, loadImage } from "canvas";
-var router4 = (0, import_express4.Router)();
+var router5 = (0, import_express5.Router)();
 var MAX_PAGE_IMAGES = Number.MAX_SAFE_INTEGER;
 var VISUAL_BATCH_SIZE = 6;
 var MAX_VISUAL_PAGES = Number.MAX_SAFE_INTEGER;
@@ -81750,7 +81810,7 @@ function resolveDeckType(input, hasImages) {
   if (!hasImages && t !== "text") return "text";
   return t;
 }
-router4.post("/generate/stream", async (req, res, next) => {
+router5.post("/generate/stream", async (req, res, next) => {
   const parsed = GenerateCardsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -81930,7 +81990,7 @@ router4.post("/generate/stream", async (req, res, next) => {
     next(err);
   }
 });
-router4.post("/generate", async (req, res, next) => {
+router5.post("/generate", async (req, res, next) => {
   const parsed = GenerateCardsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -82027,15 +82087,15 @@ router4.post("/generate", async (req, res, next) => {
     next(err);
   }
 });
-var generate_default = router4;
+var generate_default = router5;
 
 // src/routes/export-apkg.ts
-var import_express5 = __toESM(require_express2(), 1);
+var import_express6 = __toESM(require_express2(), 1);
 import { createRequire } from "module";
 import { createHash } from "crypto";
 var require2 = createRequire(import.meta.url);
 var AnkiExport = require2("anki-apkg-export").default;
-var router5 = (0, import_express5.Router)();
+var router6 = (0, import_express6.Router)();
 function sha1(str2) {
   return createHash("sha1").update(str2).digest("hex");
 }
@@ -82115,7 +82175,7 @@ function collectAllDescendantIds(allDecks, parentIds) {
   if (direct.length === 0) return [];
   return [...direct.map((d) => d.id), ...collectAllDescendantIds(allDecks, direct.map((d) => d.id))];
 }
-router5.post("/export-apkg", async (req, res, next) => {
+router6.post("/export-apkg", async (req, res, next) => {
   const { deckIds, exportName } = req.body;
   if (!Array.isArray(deckIds) || deckIds.length === 0) {
     res.status(400).json({ error: "deckIds must be a non-empty array." });
@@ -82205,14 +82265,14 @@ router5.post("/export-apkg", async (req, res, next) => {
   );
   res.end(zipBuffer);
 });
-var export_apkg_default = router5;
+var export_apkg_default = router6;
 
 // src/routes/extract-pdf.ts
-var import_express6 = __toESM(require_express2(), 1);
+var import_express7 = __toESM(require_express2(), 1);
 var import_multer = __toESM(require_multer(), 1);
 import { createCanvas as createCanvas2 } from "canvas";
 import { createWorker } from "tesseract.js";
-var router6 = (0, import_express6.Router)();
+var router7 = (0, import_express7.Router)();
 var MIN_TEXT_LENGTH = 20;
 var OCR_SCALE = 2;
 var MAX_OCR_DIMENSION = 2200;
@@ -82317,7 +82377,7 @@ async function processPdfBuffer(buffer, res, log) {
     });
   }
 }
-router6.post(
+router7.post(
   "/extract-pdf",
   (req, res, next) => {
     const ct = req.headers["content-type"] ?? "";
@@ -82327,7 +82387,7 @@ router6.post(
       next();
     }
   },
-  import_express6.default.raw({ type: ["application/pdf", "application/octet-stream"], limit: "50mb" }),
+  import_express7.default.raw({ type: ["application/pdf", "application/octet-stream"], limit: "50mb" }),
   async (req, res) => {
     const log = req.log;
     let buffer = null;
@@ -82343,11 +82403,11 @@ router6.post(
     await processPdfBuffer(buffer, res, log);
   }
 );
-var extract_pdf_default = router6;
+var extract_pdf_default = router7;
 
 // src/routes/explain.ts
-var import_express7 = __toESM(require_express2(), 1);
-var router7 = (0, import_express7.Router)();
+var import_express8 = __toESM(require_express2(), 1);
+var router8 = (0, import_express8.Router)();
 async function getOpenAIClient2() {
   if (!process.env.AI_INTEGRATIONS_OPENAI_BASE_URL || !process.env.AI_INTEGRATIONS_OPENAI_API_KEY) {
     throw new Error("AI explanation is not configured yet.");
@@ -82443,7 +82503,7 @@ STYLE:
     user: `Create OSCE stations for the topic: ${topic}`
   };
 }
-router7.post("/explain", async (req, res) => {
+router8.post("/explain", async (req, res) => {
   const { front, back, mode = "full" } = req.body;
   if (!front || !back) {
     res.status(400).json({ error: "front and back are required." });
@@ -82486,11 +82546,11 @@ router7.post("/explain", async (req, res) => {
     }
   }
 });
-var explain_default = router7;
+var explain_default = router8;
 
 // src/routes/transfer.ts
-var import_express8 = __toESM(require_express2(), 1);
-var router8 = (0, import_express8.Router)();
+var import_express9 = __toESM(require_express2(), 1);
+var router9 = (0, import_express9.Router)();
 var FORMAT_VERSION = 1;
 function buildNode(deckId, allDecks, cardsByDeck) {
   const deck = allDecks.find((d) => d.id === deckId);
@@ -82508,7 +82568,7 @@ function buildNode(deckId, allDecks, cardsByDeck) {
     subDecks: children.map((c) => buildNode(c.id, allDecks, cardsByDeck))
   };
 }
-router8.get("/export-all-json", async (_req, res, next) => {
+router9.get("/export-all-json", async (_req, res, next) => {
   try {
     const allDecks = await db.select().from(decksTable);
     const topLevel = allDecks.filter((d) => d.parentId === null).sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true, sensitivity: "base" }));
@@ -82540,7 +82600,7 @@ router8.get("/export-all-json", async (_req, res, next) => {
     next(err);
   }
 });
-router8.get("/decks/:id/export-json", async (req, res, next) => {
+router9.get("/decks/:id/export-json", async (req, res, next) => {
   const raw = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(raw, 10);
   if (isNaN(id)) {
@@ -82634,7 +82694,7 @@ async function importNode(node, parentId) {
   }
   return { deckCount, cardCount };
 }
-router8.post("/import-deck-json", async (req, res, next) => {
+router9.post("/import-deck-json", async (req, res, next) => {
   try {
     const body = req.body;
     if (!body || body.format !== "ankigen-deck") {
@@ -82700,12 +82760,12 @@ router8.post("/import-deck-json", async (req, res, next) => {
     next(err);
   }
 });
-var transfer_default = router8;
+var transfer_default = router9;
 
 // src/routes/generations.ts
-var import_express9 = __toESM(require_express2(), 1);
-var router9 = (0, import_express9.Router)();
-router9.get("/generations", async (req, res, next) => {
+var import_express10 = __toESM(require_express2(), 1);
+var router10 = (0, import_express10.Router)();
+router10.get("/generations", async (req, res, next) => {
   try {
     const limit2 = Math.min(Math.max(parseInt(String(req.query.limit ?? "100"), 10) || 100, 1), 500);
     const rows = await db.select().from(generationsTable).orderBy(desc(generationsTable.startedAt)).limit(limit2);
@@ -82714,7 +82774,7 @@ router9.get("/generations", async (req, res, next) => {
     next(err);
   }
 });
-router9.delete("/generations", async (_req, res, next) => {
+router10.delete("/generations", async (_req, res, next) => {
   try {
     await db.execute(sql`DELETE FROM generations`);
     res.json({ ok: true });
@@ -82722,20 +82782,21 @@ router9.delete("/generations", async (_req, res, next) => {
     next(err);
   }
 });
-var generations_default = router9;
+var generations_default = router10;
 
 // src/routes/index.ts
-var router10 = (0, import_express10.Router)();
-router10.use(health_default);
-router10.use(decks_default);
-router10.use(cards_default);
-router10.use(generate_default);
-router10.use(export_apkg_default);
-router10.use(extract_pdf_default);
-router10.use(explain_default);
-router10.use(transfer_default);
-router10.use(generations_default);
-var routes_default = router10;
+var router11 = (0, import_express11.Router)();
+router11.use(health_default);
+router11.use(config_default);
+router11.use(decks_default);
+router11.use(cards_default);
+router11.use(generate_default);
+router11.use(export_apkg_default);
+router11.use(extract_pdf_default);
+router11.use(explain_default);
+router11.use(transfer_default);
+router11.use(generations_default);
+var routes_default = router11;
 
 // src/lib/logger.ts
 var import_pino = __toESM(require_pino(), 1);
@@ -82756,7 +82817,7 @@ var logger = (0, import_pino.default)({
 });
 
 // src/app.ts
-var app = (0, import_express11.default)();
+var app = (0, import_express12.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -82776,9 +82837,16 @@ app.use(
     }
   })
 );
-app.use((0, import_cors.default)());
-app.use(import_express11.default.json({ limit: "50mb" }));
-app.use(import_express11.default.urlencoded({ extended: true, limit: "50mb" }));
+var corsOriginEnv = process.env["CORS_ORIGIN"];
+var corsOrigins = corsOriginEnv ? corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean) : void 0;
+app.use(
+  (0, import_cors.default)({
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    credentials: true
+  })
+);
+app.use(import_express12.default.json({ limit: "50mb" }));
+app.use(import_express12.default.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/api", routes_default);
 app.use((err, req, res, _next) => {
   const message = err instanceof Error ? err.message : "Internal server error";

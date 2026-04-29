@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import configRouter from "./config";
 import decksRouter from "./decks";
 import cardsRouter from "./cards";
 import generateRouter from "./generate";
@@ -12,6 +13,7 @@ import generationsRouter from "./generations";
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(configRouter);
 router.use(decksRouter);
 router.use(cardsRouter);
 router.use(generateRouter);
