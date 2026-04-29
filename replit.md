@@ -75,4 +75,15 @@ The project ships with a Docker setup so it can be cloned, opened in VS Code, an
 - `.vscode/tasks.json` and `.vscode/launch.json` — VS Code tasks (`dev: api`, `dev: web`, `dev: all (docker)`) and a Node debug launch config.
 - `DOCKER.md` — user-facing quickstart for the three run modes (Compose, VS Code + Docker, native pnpm).
 
+## Render.com deployment
+
+The project also ships ready for one-click Blueprint deploys on Render.com:
+
+- `render.yaml` (root) — defines `anki-postgres` (Postgres free), `anki-api` (Docker web service, Starter plan, uses `artifacts/api-server/Dockerfile` with repo root as Docker context), and `anki-web` (Render Static Site built with `pnpm --filter @workspace/anki-generator run build`).
+- Frontend talks to the API across origins via the new `VITE_API_BASE_URL` env var. When unset, `apiUrl()` falls back to same-origin `/api` (Replit + Docker behavior unchanged).
+- `vite.config.ts` no longer hard-requires `PORT` / `BASE_PATH` (defaults to `5173` / `/`) so Render's static-site build step succeeds without those vars.
+- API CORS now reads `CORS_ORIGIN` (comma-separated allow-list); when unset, behaves as before (`origin: true`, allow all). Render setup pins it to the static site's URL.
+- Secrets (`AI_INTEGRATIONS_OPENAI_API_KEY`, `CORS_ORIGIN`, `VITE_API_BASE_URL`) are marked `sync: false` in `render.yaml` so Render prompts for them on first deploy.
+- `RENDER.md` — user-facing quickstart for connecting the repo on Render and filling in secrets.
+
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

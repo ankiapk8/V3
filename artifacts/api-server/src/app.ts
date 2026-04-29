@@ -25,7 +25,16 @@ app.use(
     },
   }),
 );
-app.use(cors());
+const corsOriginEnv = process.env["CORS_ORIGIN"];
+const corsOrigins = corsOriginEnv
+  ? corsOriginEnv.split(",").map((o) => o.trim()).filter(Boolean)
+  : undefined;
+app.use(
+  cors({
+    origin: corsOrigins && corsOrigins.length > 0 ? corsOrigins : true,
+    credentials: true,
+  }),
+);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 

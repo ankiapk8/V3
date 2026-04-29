@@ -6,6 +6,12 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function apiUrl(path: string) {
+  const cleanPath = path.replace(/^\/+/, "")
+  const apiBase = import.meta.env.VITE_API_BASE_URL as string | undefined
+  if (apiBase && apiBase.length > 0) {
+    const trimmed = apiBase.replace(/\/+$/, "")
+    return `${trimmed}/${cleanPath}`
+  }
   const base = import.meta.env.BASE_URL || "/"
-  return `${base}${path.replace(/^\/+/, "")}`
+  return `${base}${cleanPath}`
 }
