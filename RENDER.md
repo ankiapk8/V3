@@ -12,9 +12,11 @@ It provisions:
 1. Push this repo to GitHub (e.g. `https://github.com/ankiapk8/V2`).
 2. In Render, click **New → Blueprint** and pick the repo. Render reads `render.yaml`
    and creates all three resources at once.
-   - If you instead created a regular **Web Service** (not Blueprint), the repo also
-     ships a root-level `Dockerfile` that builds the API server, so the default
-     "Dockerfile Path = `./Dockerfile`" works without any tweaking.
+   - If you instead created a regular **Web Service** (not Blueprint), the repo
+     ships a root-level `Dockerfile` that builds **both** the API server and the
+     React frontend into a single image. The API serves the website at `/` and
+     the API at `/api/*` from one URL, so you only need one Render service.
+     With this setup you don't need a separate static site or `VITE_API_BASE_URL`.
 3. Fill in the secrets Render asks for:
    - `AI_INTEGRATIONS_OPENAI_API_KEY` — your OpenAI API key
      (works with any OpenAI-compatible endpoint; default base URL is `https://api.openai.com/v1`)

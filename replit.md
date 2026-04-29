@@ -85,6 +85,7 @@ The project also ships ready for one-click Blueprint deploys on Render.com:
 - API CORS now reads `CORS_ORIGIN` (comma-separated allow-list); when unset, behaves as before (`origin: true`, allow all). Render setup pins it to the static site's URL.
 - Secrets (`AI_INTEGRATIONS_OPENAI_API_KEY`, `CORS_ORIGIN`, `VITE_API_BASE_URL`) are marked `sync: false` in `render.yaml` so Render prompts for them on first deploy.
 - `RENDER.md` — user-facing quickstart for connecting the repo on Render and filling in secrets.
-- Root-level `Dockerfile` (mirrors `artifacts/api-server/Dockerfile`) so a manually-created Render Web Service (or any other PaaS that defaults to `./Dockerfile`) builds the API without extra configuration.
+- Root-level `Dockerfile` so a manually-created Render Web Service (or any other PaaS that defaults to `./Dockerfile`) builds the project without extra configuration. Unlike `artifacts/api-server/Dockerfile`, the root Dockerfile **also builds the React frontend** and copies it into the runner image, then sets `FRONTEND_DIST_DIR` so the API server serves the SPA at `/` while still handling `/api/*`. One service serves both.
+- `artifacts/api-server/src/app.ts` now optionally serves a static frontend bundle when `FRONTEND_DIST_DIR` is set and exists. SPA fallback regex `^\/(?!api(\/|$)).*` keeps `/api/*` routed to the API. The block is no-op when the env var is unset (Replit dev, Blueprint deploys).
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.

@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1.7
 # Root Dockerfile so Render (and any other PaaS that defaults to ./Dockerfile)
-# can build the API server without extra configuration.
+# can build a single image that serves BOTH the API and the static frontend.
 # Build context MUST be the monorepo root.
-# Build:  docker build -t anki-api .
+# Build:  docker build -t anki-app .
+# Run:    docker run -p 8080:8080 -e DATABASE_URL=... -e AI_INTEGRATIONS_OPENAI_API_KEY=... anki-app
 
 # ---------- builder ----------
 FROM node:24-bookworm-slim AS builder
@@ -23,12 +24,17 @@ WORKDIR /repo
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json tsconfig.json ./
 COPY lib ./lib
 COPY artifacts/api-server ./artifacts/api-server
+COPY artifacts/anki-generator ./artifacts/anki-generator
 COPY scripts ./scripts
 
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
     pnpm install --frozen-lockfile
 
-RUN pnpm --filter @workspace/api-server run build
+# Build the API server (Express bundle) and the React/Vite frontend.
+# BASE_PATH=/ so the SPA's asset URLs work when served from the same origin
+# as the API. Leave VITE_API_BASE_URL unset so the frontend hits same-origin /api.
+RUN pnpm --filter @workspace/api-server run build \
+ && BASE_PATH=/ pnpm --filter @workspace/anki-generator run build
 
 # ---------- runner ----------
 FROM node:24-bookworm-slim AS runner
@@ -47,6 +53,8 @@ WORKDIR /repo/artifacts/api-server
 
 ENV NODE_ENV=production
 ENV PORT=8080
+# Tells the API server to also serve the built React app at "/" with SPA fallback.
+ENV FRONTEND_DIST_DIR=/repo/artifacts/anki-generator/dist/public
 EXPOSE 8080
 
 CMD ["node", "--enable-source-maps", "./dist/index.mjs"]
