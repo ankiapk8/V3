@@ -1,0 +1,50 @@
+2026-04-29T20:39:31.568865462Z #19 0.539 
+2026-04-29T20:39:31.87426868Z #19 0.844 
+2026-04-29T20:39:31.874288951Z #19 0.844   dist/index.mjs                       2.9mb ⚠️
+2026-04-29T20:39:31.874292391Z #19 0.844   dist/pino-worker.mjs               153.4kb
+2026-04-29T20:39:31.874295041Z #19 0.844   dist/pino-file.mjs                 142.0kb
+2026-04-29T20:39:31.874297421Z #19 0.844   dist/pino-pretty.mjs               114.6kb
+2026-04-29T20:39:31.874299931Z #19 0.844   dist/thread-stream-worker.mjs        7.3kb
+2026-04-29T20:39:31.874302301Z #19 0.844   dist/index.mjs.map                   6.2mb
+2026-04-29T20:39:31.874304672Z #19 0.844   dist/pino-worker.mjs.map           256.9kb
+2026-04-29T20:39:31.874307062Z #19 0.844   dist/pino-file.mjs.map             229.0kb
+2026-04-29T20:39:31.874309462Z #19 0.844   dist/pino-pretty.mjs.map           203.9kb
+2026-04-29T20:39:31.874311902Z #19 0.844   dist/thread-stream-worker.mjs.map   12.0kb
+2026-04-29T20:39:31.874314382Z #19 0.844 
+2026-04-29T20:39:31.874317542Z #19 0.844 ⚡ Done in 252ms
+2026-04-29T20:39:32.102505329Z #19 DONE 0.9s
+2026-04-29T20:39:33.972329655Z 
+2026-04-29T20:39:33.972368597Z #20 [runner 3/4] COPY --from=builder /repo /repo
+2026-04-29T20:39:38.729112314Z #20 DONE 4.8s
+2026-04-29T20:39:38.883866761Z 
+2026-04-29T20:39:38.883886872Z #21 [runner 4/4] WORKDIR /repo/artifacts/api-server
+2026-04-29T20:39:38.956655799Z #21 DONE 0.2s
+2026-04-29T20:39:39.11168891Z 
+2026-04-29T20:39:39.111708461Z #22 exporting to docker image format
+2026-04-29T20:39:39.111713041Z #22 exporting layers
+2026-04-29T20:39:50.291023031Z #22 exporting layers 11.3s done
+2026-04-29T20:39:50.524755007Z #22 exporting manifest sha256:03772b25c99a0edd5ba85c8cec23e218d60930a180e3881e4255564645d7863e 0.0s done
+2026-04-29T20:39:50.52480269Z #22 exporting config sha256:a66c22fe97f8d735f690581b59086e8aa3bd5eaa5e7cbc94d7e1b60121a7ddc1 0.0s done
+2026-04-29T20:39:50.940502341Z #22 DONE 12.0s
+2026-04-29T20:39:50.940527492Z 
+2026-04-29T20:39:50.940534362Z #23 exporting cache to client directory
+2026-04-29T20:39:50.940539633Z #23 preparing build cache for export
+2026-04-29T20:40:11.520192455Z #23 writing cache image manifest sha256:09f652ffed78e05e066ebdaab94d1d291002864ae3d427f46a297b414229573b done
+2026-04-29T20:40:11.520211686Z #23 DONE 20.6s
+2026-04-29T20:40:13.733489736Z Pushing image to registry...
+2026-04-29T20:40:18.872057128Z Upload succeeded
+2026-04-29T20:40:22.415985683Z ==> Deploying...
+2026-04-29T20:40:22.645641134Z ==> Setting WEB_CONCURRENCY=1 by default, based on available CPUs in the instance
+2026-04-29T20:40:34.48891865Z /repo/lib/db/src/index.ts:8
+2026-04-29T20:40:34.488971811Z   throw new Error(
+2026-04-29T20:40:34.488975311Z         ^
+2026-04-29T20:40:34.488977331Z 
+2026-04-29T20:40:34.488981461Z Error: DATABASE_URL must be set. Did you forget to provision a database?
+2026-04-29T20:40:34.488983661Z     at <anonymous> (/repo/lib/db/src/index.ts:8:9)
+2026-04-29T20:40:34.488985771Z     at ModuleJob.run (node:internal/modules/esm/module_job:437:25)
+2026-04-29T20:40:34.488987831Z     at async node:internal/modules/esm/loader:639:26
+2026-04-29T20:40:34.488992911Z     at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)
+2026-04-29T20:40:34.488996082Z 
+2026-04-29T20:40:34.488999071Z Node.js v24.15.0
+2026-04-29T20:40:40.510753298Z ==> Exited with status 1
+2026-04-29T20:40:40.513701711Z ==> Common ways to troubleshoot your deploy: https://render.com/docs/troubleshooting-deploys
