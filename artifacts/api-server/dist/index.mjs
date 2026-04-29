@@ -40913,7 +40913,7 @@ var init_client = __esm({
        * @param {Record<string, string | undefined>} opts.defaultQuery - Default query parameters to include with every request to the API.
        * @param {boolean} [opts.dangerouslyAllowBrowser=false] - By default, client-side use of this library is not allowed, as it risks exposing your secret API credentials to attackers.
        */
-      constructor({ baseURL = readEnv("OPENAI_BASE_URL"), apiKey = readEnv("OPENAI_API_KEY"), organization = readEnv("OPENAI_ORG_ID") ?? null, project = readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, ...opts } = {}) {
+      constructor({ baseURL: baseURL2 = readEnv("OPENAI_BASE_URL"), apiKey = readEnv("OPENAI_API_KEY"), organization = readEnv("OPENAI_ORG_ID") ?? null, project = readEnv("OPENAI_PROJECT_ID") ?? null, webhookSecret = readEnv("OPENAI_WEBHOOK_SECRET") ?? null, ...opts } = {}) {
         _OpenAI_instances.add(this);
         _OpenAI_encoder.set(this, void 0);
         this.completions = new Completions2(this);
@@ -40947,7 +40947,7 @@ var init_client = __esm({
           project,
           webhookSecret,
           ...opts,
-          baseURL: baseURL || `https://api.openai.com/v1`
+          baseURL: baseURL2 || `https://api.openai.com/v1`
         };
         if (!options.dangerouslyAllowBrowser && isRunningInBrowser()) {
           throw new OpenAIError("It looks like you're running in a browser-like environment.\n\nThis is disabled by default, as it risks exposing your secret API credentials to attackers.\nIf you understand the risks and have appropriate mitigations in place,\nyou can set the `dangerouslyAllowBrowser` option to `true`, e.g.,\n\nnew OpenAI({ apiKey, dangerouslyAllowBrowser: true });\n\nhttps://help.openai.com/en/articles/5112595-best-practices-for-api-key-safety\n");
@@ -41033,8 +41033,8 @@ var init_client = __esm({
         return true;
       }
       buildURL(path2, query, defaultBaseURL) {
-        const baseURL = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
-        const url2 = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL + (baseURL.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
+        const baseURL2 = !__classPrivateFieldGet(this, _OpenAI_instances, "m", _OpenAI_baseURLOverridden).call(this) && defaultBaseURL || this.baseURL;
+        const url2 = isAbsoluteURL(path2) ? new URL(path2) : new URL(baseURL2 + (baseURL2.endsWith("/") && path2.startsWith("/") ? path2.slice(1) : path2));
         const defaultQuery = this.defaultQuery();
         const pathQuery = Object.fromEntries(url2.searchParams);
         if (!isEmptyObj(defaultQuery) || !isEmptyObj(pathQuery)) {
@@ -41403,7 +41403,7 @@ var init_openai = __esm({
 });
 
 // ../../lib/integrations-openai-ai-server/src/client.ts
-var openai;
+var baseURL, isOpenRouter, openai;
 var init_client2 = __esm({
   "../../lib/integrations-openai-ai-server/src/client.ts"() {
     "use strict";
@@ -41418,9 +41418,17 @@ var init_client2 = __esm({
         "AI_INTEGRATIONS_OPENAI_API_KEY must be set. Did you forget to provision the OpenAI AI integration?"
       );
     }
+    baseURL = process.env.AI_INTEGRATIONS_OPENAI_BASE_URL;
+    isOpenRouter = /openrouter\.ai/i.test(baseURL ?? "");
     openai = new OpenAI({
       apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-      baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL
+      baseURL,
+      ...isOpenRouter ? {
+        defaultHeaders: {
+          "HTTP-Referer": process.env.OPENROUTER_REFERRER ?? "https://anki-generator.local",
+          "X-Title": process.env.OPENROUTER_TITLE ?? "Anki Card Generator"
+        }
+      } : {}
     });
   }
 });
@@ -81076,7 +81084,12 @@ if (!process.env.DATABASE_URL) {
     "DATABASE_URL must be set. Did you forget to provision a database?"
   );
 }
-var pool = new Pool3({ connectionString: process.env.DATABASE_URL });
+var databaseUrl = process.env.DATABASE_URL;
+var needsSsl = /sslmode=require/i.test(databaseUrl) || /\.neon\.tech/i.test(databaseUrl) || /\.render\.com/i.test(databaseUrl) || process.env.PGSSLMODE === "require";
+var pool = new Pool3({
+  connectionString: databaseUrl,
+  ...needsSsl ? { ssl: { rejectUnauthorized: false } } : {}
+});
 var db = drizzle(pool, { schema: schema_exports });
 async function ensureDatabaseSchema() {
   await pool.query(`
@@ -81691,7 +81704,7 @@ Respond ONLY with a JSON array of objects with "front" (question) and "back" (an
 
 ${text2.slice(0, 2e4)}`;
   const response = await createChatCompletionWithRetry(openai3, {
-    model: "gpt-4.1-mini",
+    model: process.env["OPENAI_TEXT_MODEL"] ?? "gpt-4.1-mini",
     max_completion_tokens: 32768,
     stream: false,
     messages: [
@@ -81732,7 +81745,7 @@ Return ONLY a JSON array. Each item must have exactly:
 No markdown, no explanation, just the JSON array.${customPromptBlock(customPrompt)}`;
   try {
     const response = await createChatCompletionWithRetry(openai3, {
-      model: "gpt-4.1-mini",
+      model: process.env["OPENAI_VISION_MODEL"] ?? process.env["OPENAI_TEXT_MODEL"] ?? "gpt-4.1-mini",
       max_completion_tokens: 16384,
       stream: false,
       messages: [
@@ -82524,7 +82537,7 @@ router8.post("/explain", async (req, res) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   try {
     const stream = await openai3.chat.completions.create({
-      model: "gpt-4.1-mini",
+      model: process.env["OPENAI_TEXT_MODEL"] ?? "gpt-4.1-mini",
       max_completion_tokens: maxTokens,
       stream: true,
       messages: [
