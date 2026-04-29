@@ -210,7 +210,7 @@ Respond ONLY with a JSON array of objects with "front" (question) and "back" (an
 
   const response = await createChatCompletionWithRetry(openai, {
     model: "gpt-4.1-mini",
-    max_completion_tokens: 16384,
+    max_completion_tokens: 32768,
     stream: false as const,
     messages: [
       { role: "system", content: systemPrompt },
@@ -269,7 +269,7 @@ No markdown, no explanation, just the JSON array.${customPromptBlock(customPromp
   try {
     const response = await createChatCompletionWithRetry(openai, {
       model: "gpt-4.1-mini",
-      max_completion_tokens: 4096,
+      max_completion_tokens: 16384,
       stream: false as const,
       messages: [
         { role: "system", content: systemPrompt },

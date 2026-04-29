@@ -17,7 +17,7 @@ function buildPrompts(mode: ExplainMode, front: string, back: string): { system:
 
   if (mode === "full") {
     return {
-      maxTokens: 16000,
+      maxTokens: 32768,
       system: `Act as a senior physician, medical professor, and clinical educator.
 
 Your response must be:
@@ -65,7 +65,7 @@ OPTIONAL (include if relevant):
 
   if (mode === "revision") {
     return {
-      maxTokens: 8192,
+      maxTokens: 16384,
       system: `Act as a senior medical educator. Your task is to create a concise, high-yield 1-page revision sheet.
 
 FORMAT:
@@ -84,7 +84,7 @@ STYLE: Concise, structured, exam-ready.`,
 
   // osce
   return {
-    maxTokens: 8192,
+    maxTokens: 16384,
     system: `Act as a senior OSCE examiner and clinical educator. Generate realistic OSCE (Objective Structured Clinical Examination) questions.
 
 For each station include:
